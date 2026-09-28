@@ -37,6 +37,7 @@
 |-----|-----|-----|
 | 1 | ноутбук | `sudo deploy/install-laptop.sh` |
 | 2 | ноутбук | WireGuard, ключи |
+| 2a | VPS | добавление ключа ноутбука (см. ниже) |
 | 3 | VPS | `sudo deploy/wireguard/setup-wireguard-vps.sh <ключ ноутбука>` |
 | 4 | VPS | nginx, файрвол |
 | 5 | VPS | сертификат Let's Encrypt |
@@ -90,20 +91,14 @@ sudo ./deploy/install-laptop.sh
 ### На ноутбуке
 
 ```bash
-sudo apt install wireguard
-sudo wg genkey | sudo tee /etc/wireguard/laptop.key | sudo wg pubkey | sudo tee /etc/wireguard/laptop.pub
+sudo apt install -y wireguard
+sudo ./deploy/wireguard/setup-wireguard-laptop.sh <публичный_ключ_VPS>
 ```
 
-Скопируйте шаблон и подставьте ключи:
-
-```bash
-sudo cp deploy/wireguard/wg0.conf.laptop /etc/wireguard/wg0.conf
-sudo chmod 600 /etc/wireguard/wg0.conf
-sudo nano /etc/wireguard/wg0.conf   # PrivateKey из laptop.key
-sudo systemctl enable --now wg-quick@wg0
-```
-
-Ключ VPS подставите на следующем шаге.
+Скрипт создаёт ключи ноутбука (один раз, при повторном запуске
+использует существующие), пишет конфигурацию, поднимает туннель
+и печатает **публичный ключ ноутбука**. Этот ключ нужно передать
+на сервер — без него туннель не поднимется.
 
 `AllowedIPs = 10.8.0.0/24` — через VPN идёт только связь с VPS,
 обычный интернет напрямую и быстрее.
@@ -117,8 +112,13 @@ sudo ./deploy/wireguard/setup-wireguard-vps.sh <публичный_ключ_но
 Скрипт сгенерирует ключи VPS, поднимет туннель, настроит файрвол
 (наружу только 22, 80, 443) и напечатает публичный ключ VPS.
 
-**Порт WireGuard (51820) наружу не открывается** — туннель работает
-между двумя конкретными адресами.
+**Порт 51820/udp открыт наружу — это обязательно.** Ноутбук стоит за
+домашним или офисным роутером, то есть снаружи у него нет адреса,
+и соединение может установить только он, направив запрос на VPS.
+Если закрыть порт, туннель не поднимется никогда.
+
+Наружу открыты ровно четыре порта: 22 (SSH), 80 (только для выпуска
+сертификата), 443 (сайт) и 51820/udp (WireGuard).
 
 ### Проверка
 

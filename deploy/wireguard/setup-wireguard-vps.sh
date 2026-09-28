@@ -59,14 +59,15 @@ systemctl enable --now wg-quick@${WG_IF}
 # Наружу оставляем только SSH и HTTPS.
 # SSH: 22/tcp, чтобы можно было подключаться.
 # 443: сайт.
-# Порт WireGuard наружу НЕ открываем: он нужен только между VPS и ноутбуком.
 log "Настраиваю ufw"
-ufw --force reset >/dev/null
-ufw default deny incoming   >/dev/null
-ufw default allow outgoing  >/dev/null
-ufw allow 22/tcp   comment 'SSH'      >/dev/null
-ufw allow 443/tcp  comment 'HTTPS'    >/dev/null
-ufw allow 80/tcp   comment 'HTTP для сертификата' >/dev/null
+# Порт WireGuard (51820/udp) обязан быть открыт наружу.
+# Ноутбук стоит за домашним или офисным роутером, то есть снаружи
+# у него нет адреса, и соединение может установить только он.
+# Если закрыть порт, туннель не поднимется никогда.
+ufw allow 22/tcp     comment 'SSH'      >/dev/null
+ufw allow 80/tcp     comment 'HTTP ACME' >/dev/null
+ufw allow 443/tcp    comment 'HTTPS'    >/dev/null
+ufw allow 51820/udp  comment 'WireGuard' >/dev/null
 ufw --force enable >/dev/null
 
 log "Готово. Туннель поднят."
