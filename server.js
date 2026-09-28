@@ -31,17 +31,20 @@ const publicDir = process.pkg
 
 console.log('Корневая папка приложения:', appRoot);
 
-// Пути к папкам для данных
-const uploadDir = path.join(appRoot, 'uploads');
-const dbDir = path.join(appRoot, 'database');
+// Пути к папкам с данными.
+//
+// По умолчанию они лежат рядом с кодом, что удобно при разработке.
+// В бою их лучше вынести в отдельный каталог (например /var/lib/ztlab):
+// тогда обновление кода через git или rsync не задевает данные,
+// а резервную копию снимать проще — одной командой.
+const uploadDir = path.resolve(process.env.UPLOAD_DIR || path.join(appRoot, 'uploads'));
+const dbDir = path.resolve(process.env.DB_DIR || path.join(appRoot, 'database'));
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log('Создана папка для загрузок:', uploadDir);
+for (const dir of [uploadDir, dbDir]) {
+  fs.mkdirSync(dir, { recursive: true });
 }
-
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+if (!process.env.UPLOAD_DIR) {
+  console.log('Создана папка для загрузок:', uploadDir);
 }
 
 // ------ Хэширование паролей ------
@@ -268,6 +271,17 @@ function query(sql, params = []) {
 }
 
 // ------ Настройка Express ------
+
+// nginx на VPS проксирует запросы по WireGuard, поэтому в req.ip без этой
+// настройки попадёт адрес nginx, а не реальный адрес сотрудника.
+// Последствие: все пользователи считались бы одним адресом, и блокировка
+// после 10 неудачных попыток выкидывала бы всю лабораторию разом.
+//
+// Доверяем только локальным и частным адресам (RFC1918/RFC4193) —
+// именно оттуда приходит nginx. Запросы с публичных адресов
+// заголовку X-Forwarded-For не верят.
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, linklocal, uniquelocal');
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use((req, res, next) => {
@@ -381,8 +395,25 @@ const attemptsSweep = setInterval(() => {
 }, ATTEMPT_WINDOW_MS);
 if (attemptsSweep.unref) attemptsSweep.unref();
 
+// Проверка живости. Не требует входа и не отдаёт никаких данных.
+// nginx и systemd используют её, чтобы понять, поднялся ли процесс.
+app.get('/health', (req, res) => {
+  let dbOk = true;
+  try {
+    db.prepare('SELECT 1').get();
+  } catch (e) {
+    dbOk = false;
+  }
+  const ok = dbOk ? 'ok' : 'db-error';
+  // Видимый адрес нужен только при настройке: по нему видно, проходит ли
+  // nginx и какой реальный IP сотрудника. В бою адрес не отдаём.
+  const body = { status: ok, uptime: Math.round(process.uptime()) };
+  if (!IS_PROD) body.ip = req.ip;
+  res.status(dbOk ? 200 : 503).json(body);
+});
+
 // ------ Middleware авторизации ------
-const PUBLIC_PATHS = new Set(['/login', '/set-user', '/register', '/register-lab']);
+const PUBLIC_PATHS = new Set(['/login', '/set-user', '/register', '/register-lab', '/health']);
 
 app.use((req, res, next) => {
   if (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/public')) {
@@ -1227,10 +1258,23 @@ app.get('/titan/print', async (req, res) => {
 });
 
 // Запуск сервера
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Сервер запущен на http://localhost:${PORT}`);
-  console.log(`Для доступа с других компьютеров используйте IP-адрес этого компьютера`);
-  if (process.env.OPEN_BROWSER !== '0') {
+//
+// HOST: на боевой машине приложение слушает только адрес WireGuard,
+// а не всю сеть. Иначе любой в локальной сети ноутбука обратится к нему
+// в обход nginx и без HTTPS.
+const HOST = process.env.HOST || '0.0.0.0';
+const OPEN_BROWSER = process.env.OPEN_BROWSER !== '0';
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+if (IS_PROD) {
+  // В боевом режиме браузер не открываем, логи идут в systemd.
+  console.log(`✅ ZT Lab запущен: http://${HOST}:${PORT}`);
+} else {
+  console.log(`✅ Сервер запущен на http://${HOST}:${PORT}`);
+  console.log('Для доступа с других компьютеров используйте IP-адрес этого компьютера');
+}
+
+if (OPEN_BROWSER && !IS_PROD) {
     const os = require('os');
     const url = `http://localhost:${PORT}`;
     let cmd = null;
@@ -1255,5 +1299,9 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log('🌐 Открываю браузер...');
       } catch (e) { /* ignore */ }
     }
-  }
+}
+// Слушаем только на HOST. В бою это адрес WireGuard (10.x.x.x),
+// в разработке — 0.0.0.0, чтобы было видно с других устройств.
+app.listen(PORT, HOST, () => {
+  console.log(`📡 Слушаем ${HOST}:${PORT}`);
 });

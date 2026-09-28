@@ -1,0 +1,59 @@
+[Unit]
+Description=ZT Lab — хранение 3D-файлов и учёт титановых оснований
+Documentation=file:/opt/ztlab/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ztlab
+Group=ztlab
+WorkingDirectory=/opt/ztlab
+
+# Секрет и пути берём из файла, который не попадает в git.
+# В нём же задаётся NODE_ENV=production и COOKIE_SECURE=1.
+EnvironmentFile=/etc/ztlab/ztlab.env
+
+ExecStart=/usr/bin/node /opt/ztlab/server.js
+
+# При падении перезапуск, но не чаще: если ошибка в коде,
+# бесконечные перезапуски только съедят память.
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Стандартные каталоги журналов
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ztlab
+
+# --- Изоляция и ограничения ---
+# Приложению не нужны никакие права, кроме записи в свои каталоги.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+# Из-за better-sqlite3 (нативный модуль) запрет исполняемой памяти
+# MemoryDenyWriteExecute оставлен выключенным: иначе Node не запустится.
+
+# Единственные папки, куда приложению можно писать.
+ReadWritePaths=/var/lib/ztlab/database /var/lib/ztlab/uploads
+
+# Файлы 3D-моделей бывают крупными, но такими должны быть и загрузка,
+# и раздача. Ограничение в 2 ГБ на файл заведомо избыточно.
+LimitFSIZE=2G
+
+# Память: STL в память не грузятся, потолок нужен на запас.
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target
