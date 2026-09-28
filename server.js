@@ -43,6 +43,28 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
+// ------ Хэширование паролей ------
+// scrypt из стандартной библиотеки Node: не нужно тянуть bcrypt,
+// и он устойчив к перебору. Формат: scrypt$<соль>$<хэш>
+const crypto = require('crypto');
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  const parts = stored.split('$');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+  const [, salt, hash] = parts;
+  const candidate = crypto.scryptSync(password, salt, 64);
+  const expected = Buffer.from(hash, 'hex');
+  if (candidate.length !== expected.length) return false;
+  return crypto.timingSafeEqual(candidate, expected);
+}
+
 // ------ Подключение к SQLite ------
 const db = new Database(path.join(dbDir, 'exo.db'));
 db.pragma('journal_mode = WAL');
@@ -165,9 +187,22 @@ function migrateLegacyData() {
       );
     }
 
-    const insertUser = db.prepare('INSERT OR IGNORE INTO users (name) VALUES (?)');
-    for (const u of legacyUsers) {
-      insertUser.run(u.name);
+    // Старые пользователи переносятся без паролей (в старой версии их не
+    // было вовсе). Им выдаётся временный пароль из переменной окружения,
+    // который нужно сменить при первом входе. Если переменная не задана,
+    // переносим только имя и роль — учётку придётся создать заново.
+    const tempPass = process.env.MIGRATION_TEMP_PASSWORD;
+    if (tempPass) {
+      const insertUser = db.prepare(
+        'INSERT OR IGNORE INTO users (name, password_hash, role, active, lab_id) VALUES (?, ?, ?, 1, 1)'
+      );
+      const h = hashPassword(tempPass);
+      for (const u of legacyUsers) {
+        insertUser.run(u.name, h, 'tech');
+      }
+      console.log(`Временный пароль для перенесённых пользователей: из MIGRATION_TEMP_PASSWORD`);
+    } else {
+      console.log('MIGRATION_TEMP_PASSWORD не задан — пользователи перенесены без паролей, создайте их заново через /add-user');
     }
 
     legacy.close();
@@ -236,28 +271,6 @@ const multerStorage = multer.diskStorage({
   }
 });
 const upload = multer({ storage: multerStorage });
-
-// ------ Хэширование паролей ------
-// scrypt из стандартной библиотеки Node: не нужно тянуть bcrypt,
-// и он устойчив к перебору. Формат: scrypt$<соль>$<хэш>
-const crypto = require('crypto');
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `scrypt$${salt}$${hash}`;
-}
-
-function verifyPassword(password, stored) {
-  if (!stored) return false;
-  const parts = stored.split('$');
-  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
-  const [, salt, hash] = parts;
-  const candidate = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, 'hex');
-  if (candidate.length !== expected.length) return false;
-  return crypto.timingSafeEqual(candidate, expected);
-}
 
 // Защита от подбора пароля: не больше 10 попыток с одного адреса за 15 минут.
 const loginAttempts = new Map();
