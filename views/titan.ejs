@@ -344,22 +344,22 @@
                 <th>Позиционер</th>
                 <th>Статус</th>
                 <th>Техник</th>
-                <% if (isElena) { %>
+                <% if (isAdmin) { %>
                 <th>Действие</th>
                 <% } %>
             </tr>
         </thead>
         <tbody id="ordersTableBody">
             <% if (orders.length === 0) { %>
-                <tr><td colspan="<%= isElena ? 8 : 7 %>" style="text-align:center;">Нет записей</td></tr>
+                <tr><td colspan="<%= isAdmin ? 8 : 7 %>" style="text-align:center;">Нет записей</td></tr>
             <% } else { %>
                 <% groupedOrders.forEach(month => { %>
                     <tr class="group-month-row" data-group="month" data-month-key="<%= month.monthKey %>">
-                        <td colspan="<%= isElena ? 8 : 7 %>"><span class="group-toggle" data-month-key="<%= month.monthKey %>">▼</span><%= month.monthLabel %></td>
+                        <td colspan="<%= isAdmin ? 8 : 7 %>"><span class="group-toggle" data-month-key="<%= month.monthKey %>">▼</span><%= month.monthLabel %></td>
                     </tr>
                     <% month.daysList.forEach(day => { %>
                         <tr class="group-day-row <%= day.isToday ? 'day-today' : '' %>" data-group="day" data-month-key="<%= month.monthKey %>" data-day-key="<%= day.dateKey %>" data-today="<%= day.isToday ? '1' : '0' %>">
-                            <td colspan="<%= isElena ? 8 : 7 %>"><span class="group-toggle" style="margin-left: 20px;" data-day-key="<%= day.dateKey %>">▼</span><%= day.dayLabel %><% if (day.isToday) { %> <em>(сегодня)</em><% } %></td>
+                            <td colspan="<%= isAdmin ? 8 : 7 %>"><span class="group-toggle" style="margin-left: 20px;" data-day-key="<%= day.dateKey %>">▼</span><%= day.dayLabel %><% if (day.isToday) { %> <em>(сегодня)</em><% } %></td>
                         </tr>
                         <% day.orders.forEach(order => { %>
                             <tr class="order-row" data-group="file" data-month-key="<%= month.monthKey %>" data-day-key="<%= day.dateKey %>">
@@ -377,7 +377,7 @@
                                     </span>
                                 </td>
                                 <td data-label="Техник"><%= order.created_by || '-' %></td>
-                                <% if (isElena) { %>
+                                <% if (isAdmin) { %>
                                 <td data-label="Действие">
                                     <button class="btn" onclick="toggleStatus(<%= order.id %>, '<%= order.status %>')">
                                         <%= order.status === 'pending' ? 'Выдать' : 'Вернуть' %>

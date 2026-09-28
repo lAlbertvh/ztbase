@@ -30,8 +30,15 @@
             <div class="error"><%= error %></div>
         <% } %>
         <form method="post" action="/set-user">
+            <label for="lab_slug">Адрес лаборатории</label>
+            <div style="display:flex;align-items:center;">
+                <input type="text" id="lab_slug" name="lab_slug" required autocomplete="organization" autofocus
+                       value="<%= typeof preslug !== 'undefined' && preslug ? preslug : '' %>"
+                       placeholder="ivanova" style="margin-bottom:0;">
+                <span style="padding-left:8px;color:#888;font-size:14px;">.ztlab.ru</span>
+            </div>
             <label for="username">Имя</label>
-            <input type="text" id="username" name="username" required autocomplete="username" autofocus>
+            <input type="text" id="username" name="username" required autocomplete="username">
             <label for="password">Пароль</label>
             <input type="password" id="password" name="password" required autocomplete="current-password">
             <button type="submit">Войти</button>

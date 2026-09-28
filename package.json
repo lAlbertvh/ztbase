@@ -28,6 +28,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
     "better-sqlite3": "^12.6.0",
     "dotenv": "^17.3.1",
     "ejs": "^4.0.1",
@@ -38,5 +39,9 @@
   },
   "devDependencies": {
     "@yao-pkg/pkg": "^6.14.2"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.6.0": true,
+    "esbuild@0.27.7": true
   }
 }

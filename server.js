@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const { storage, uniqueName, BACKEND } = require('./src/services/storage');
+const SqliteStore = require('./src/services/session-store');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -149,6 +150,44 @@ function initDb() {
   addColSafe('users', 'role', "TEXT DEFAULT 'tech'");
   addColSafe('users', 'active', 'BOOLEAN DEFAULT 1');
 
+  // Имя сотрудника уникально только внутри своей лаборатории.
+  // Раньше name был UNIQUE на уровне всей таблицы, из-за чего вторая
+  // лаборатория не могла завести сотрудника с тем же именем.
+  // SQLite не умеет снимать UNIQUE с колонки, поэтому таблица пересоздаётся.
+  const userIdx = db.prepare("PRAGMA index_list(users)").all();
+  const hasLabNameUnique = userIdx.some(
+    i => i.unique === 1 && /users.*lab_id.*name|users.*name.*lab_id/i.test(
+      (db.prepare(`PRAGMA index_info('${i.name}')`).all().map(c => c.name).join(','))
+    )
+  );
+  if (!hasLabNameUnique) {
+    const dupe = db.prepare(`
+      SELECT lab_id, name FROM users GROUP BY lab_id, name HAVING COUNT(*) > 1
+    `).all();
+    for (const d of dupe) {
+      db.prepare('DELETE FROM users WHERE lab_id = ? AND name = ?').run(d.lab_id, d.name);
+      console.log(`Удалён дубликат пользователя: ${d.name} (lab_id=${d.lab_id})`);
+    }
+    db.exec('PRAGMA foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        lab_id INTEGER DEFAULT 1,
+        password_hash TEXT,
+        role TEXT DEFAULT 'tech',
+        active BOOLEAN DEFAULT 1,
+        UNIQUE (lab_id, name)
+      );
+      INSERT INTO users_new (id, name, lab_id, password_hash, role, active)
+        SELECT id, name, lab_id, password_hash, role, active FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+    db.exec('PRAGMA foreign_keys = ON');
+    console.log('users: уникальность имени ограничена лабораторией (lab_id, name)');
+  }
+
   const userCount = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (userCount === 0) {
     console.log('Пользователей нет — создайте лабораторию через /register');
@@ -238,14 +277,47 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Секрет для подписи cookie. В рабочей версии он обязан быть задан:
+// с ключом из примера любой может подделать сессию администратора.
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET || SESSION_SECRET === 'your-secret-key-change-this') {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('SESSION_SECRET не задан. Приложение не запускается.');
+    process.exit(1);
+  }
+  console.warn('ВНИМАНИЕ: SESSION_SECRET не задан, используется временный ключ.');
+}
+
+// Временный ключ только для локальной разработки: он меняется при каждом
+// запуске, поэтому сессии не переживают перезапуск — и это безопасно.
+const devSecret = SESSION_SECRET || require('crypto').randomBytes(32).toString('hex');
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
+  store: new SqliteStore(db),
+  secret: devSecret,
   resave: false,
-  saveUninitialized: true,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 }
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 12 * 60 * 60 * 1000, // 12 часов: рабочая смена
+    httpOnly: true,
+    sameSite: 'lax',
+    // За nginx с HTTPS cookie должна быть secure, иначе браузер
+    // не отправит её и вход будет сбрасываться при каждом обновлении.
+    secure: process.env.COOKIE_SECURE === '1'
+  }
 }));
 
 app.use(express.static(publicDir));
+
+// Браузер не должен сохранять страницы с заказами на диск: после выхода
+// из аккаунта данные остались бы в кэше и могли бы попасть в поле зрения
+// следующего сотрудника на том же компьютере.
+app.use((req, res, next) => {
+  if (req.path.startsWith('/public')) return next();
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  next();
+});
 app.set('view engine', 'ejs');
 app.set('views', viewsDir);
 
@@ -317,7 +389,11 @@ function requireAdmin(req, res, next) {
 
 // Страница входа
 app.get('/login', async (req, res) => {
-  res.render('login', { error: null });
+  // Адрес лаборатории можно указать один раз и потом просто входить по паролю.
+  // Ссылка вида /login?lab=ivanova приходит из письма или закладки.
+  const preslug = String(req.query.lab || '').trim();
+  const error = String(req.query.error || '');
+  res.render('login', { error: error || null, preslug });
 });
 
 // Страница регистрации лаборатории
@@ -330,33 +406,50 @@ app.get('/register', async (req, res) => {
 app.post('/set-user', async (req, res) => {
   const username = (req.body.username || '').trim();
   const password = req.body.password || '';
+  const slug = (req.body.lab_slug || '').trim().toLowerCase();
   const ip = req.ip || 'unknown';
 
   if (attemptsFor(ip) > MAX_ATTEMPTS) {
-    return res.status(429).render('login', { error: 'Слишком много попыток. Подождите 15 минут.' });
+    return res.status(429).render('login', { error: 'Слишком много попыток. Подождите 15 минут.', preslug: slug });
   }
 
+  const fail = (msg, status) => res.status(status).render('login', { error: msg, preslug: slug });
+
   try {
+    // Лабораторию нужно знать заранее: одно и то же имя может быть
+    // у сотрудника любой лаборатории, искать по всем сразу нельзя —
+    // иначе можно войти в чужую лабораторию, назвав чужое имя.
+    if (!slug) {
+      return fail('Укажите адрес лаборатории', 400);
+    }
+    const lab = query('SELECT id, slug FROM labs WHERE slug = ?', [slug]);
+    if (lab.rows.length === 0) {
+      // Не сообщаем, существует ли адрес, чтобы не перебирать лаборатории.
+      return fail('Неверное имя, пароль или адрес лаборатории', 401);
+    }
+    const labId = lab.rows[0].id;
+
     const result = query(
       'SELECT * FROM users WHERE name = ? AND lab_id = ?',
-      [username, req.session.labId || 1]
+      [username, labId]
     );
     if (result.rows.length === 0) {
-      return res.status(401).render('login', { error: 'Неверное имя или пароль' });
+      return fail('Неверное имя, пароль или адрес лаборатории', 401);
     }
 
     const user = result.rows[0];
     if (!user.active) {
-      return res.status(403).render('login', { error: 'Учётная запись отключена' });
+      return fail('Учётная запись отключена', 403);
     }
-    if (!verifyPassword(password, user.password_hash)) {
-      return res.status(401).render('login', { error: 'Неверное имя или пароль' });
+    if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
+      return fail('Неверное имя, пароль или адрес лаборатории', 401);
     }
 
     clearAttempts(ip);
     req.session.user = username;
-    req.session.labId = user.lab_id;
+    req.session.labId = labId;
     req.session.role = user.role;
+    req.session.labSlug = slug;
     res.redirect('/');
   } catch (err) {
     console.error(err);
@@ -365,8 +458,11 @@ app.post('/set-user', async (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
+  // Адрес лаборатории запоминаем, чтобы на форме входа он уже был заполнен.
+  const slug = req.session.labSlug || '';
+  req.session.destroy(() => {
+    res.redirect(slug ? `/login?lab=${encodeURIComponent(slug)}` : '/login');
+  });
 });
 
 // Регистрация новой лаборатории. Создаёт лабораторию и первого
@@ -402,6 +498,7 @@ app.post('/register-lab', async (req, res) => {
     req.session.user = userName;
     req.session.labId = labId;
     req.session.role = 'admin';
+    req.session.labSlug = slug;
     res.redirect('/');
   } catch (err) {
     console.error(err);
@@ -491,6 +588,7 @@ app.get('/', async (req, res) => {
       todayKey: today,
       users: uploaders,
       currentUser: req.session.user,
+      isAdmin: req.session.role === 'admin',
       filters: { date, uploader, downloaded, filename }
     });
   } catch (err) {
@@ -625,17 +723,13 @@ const imageMime = {
 app.get('/image/:id', async (req, res) => {
   const fileId = req.params.id;
   try {
-    const result = query('SELECT image_name, uploader FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
+    const result = query('SELECT image_name, lab_id FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
     if (result.rows.length === 0 || !result.rows[0].image_name) {
       return res.status(404).send('Изображение не найдено.');
     }
     const file = result.rows[0];
-    const ext = path.extname(file.image_name).toLowerCase();
-    const contentType = imageMime[ext] || 'image/png';
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', 'inline');
-    const imgPath = await storage.pathFor(file.lab_id || 1, file.image_name);
-    res.sendFile(imgPath);
+    // Через storage, а не sendFile: при STORAGE_BACKEND=s3 файла на диске нет.
+    await storage.sendFile(res, file.lab_id, file.image_name, file.image_name, true);
   } catch (err) {
     console.error(err);
     res.status(500).send('Ошибка сервера');
@@ -646,7 +740,7 @@ app.get('/image/:id', async (req, res) => {
 app.get('/download-image/:id', async (req, res) => {
   const fileId = req.params.id;
   try {
-    const result = query('SELECT image_name, uploader, original_name FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
+    const result = query('SELECT image_name, lab_id, original_name FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
     if (result.rows.length === 0 || !result.rows[0].image_name) {
       return res.status(404).send('Изображение не найдено.');
     }

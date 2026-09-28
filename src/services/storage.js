@@ -36,7 +36,15 @@ const localBackend = {
   async put(tmpPath, labId, fileName) {
     const dest = localPathFor(keyFor(labId, fileName));
     await fsp.mkdir(path.dirname(dest), { recursive: true });
-    await fsp.rename(tmpPath, dest);
+    try {
+      await fsp.rename(tmpPath, dest);
+    } catch (e) {
+      // EXDEV: временная папка и uploads на разных файловых системах
+      // (например, tmpfs или отдельный том). Тогда rename невозможен.
+      if (e.code !== 'EXDEV') throw e;
+      await fsp.copyFile(tmpPath, dest);
+      await fsp.unlink(tmpPath);
+    }
     return fileName;
   },
 
@@ -72,8 +80,14 @@ const localBackend = {
   },
 
   // Поддерживает докачку (Range) — важно для просмотра больших STL.
-  async sendFile(res, labId, fileName, downloadName) {
-    res.download(await this.pathFor(labId, fileName), downloadName);
+  // inline = true показывает файл в браузере (картинки), иначе скачивает.
+  async sendFile(res, labId, fileName, downloadName, inline = false) {
+    const p = await this.pathFor(labId, fileName);
+    if (inline) {
+      // sendFile сам подставит Content-Type по расширению и поддержит Range.
+      return res.sendFile(p, { headers: { 'Content-Disposition': 'inline' } });
+    }
+    return res.download(p, downloadName);
   },
 
   // Поток для пересчёта размера при удалении старых файлов.
@@ -154,17 +168,18 @@ const s3Backend = {
     }
   },
 
-  async sendFile(res, labId, fileName, downloadName) {
+  async sendFile(res, labId, fileName, downloadName, inline = false) {
     const { GetObjectCommand } = require('@aws-sdk/client-s3');
     const key = keyFor(labId, fileName).split(path.sep).join('/');
     const r = await getS3().send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
-    if (downloadName) {
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`
-      );
+    const disposition = inline ? 'inline' : 'attachment';
+    res.setHeader(
+      'Content-Disposition',
+      `${disposition}; filename*=UTF-8''${encodeURIComponent(downloadName || fileName)}`
+    );
+    if (r.ContentLength !== undefined) {
+      res.setHeader('Content-Length', r.ContentLength);
     }
-    res.setHeader('Content-Length', r.ContentLength);
     res.setHeader('Content-Type', r.ContentType || 'application/octet-stream');
     r.Body.pipe(res);
   },
