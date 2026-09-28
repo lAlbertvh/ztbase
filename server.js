@@ -344,25 +344,42 @@ const multerStorage = multer.diskStorage({
 });
 const upload = multer({ storage: multerStorage });
 
-// Защита от подбора пароля: не больше 10 попыток с одного адреса за 15 минут.
+// Защита от подбора пароля.
+//
+// Счётчика два, потому что лаборатория обычно сидит за одним роутером,
+// и один счётчик на весь адрес блокировал бы вход сразу всем сотрудникам.
+//
+//  1) на пару «адрес + сотрудник» — 10 попыток. Защищает конкретную учётку.
+//  2) на адрес — 100 попыток. Ловит перебор с перебором имён подряд,
+//     но обычных сотрудников не задевает.
 const loginAttempts = new Map();
 const MAX_ATTEMPTS = 10;
+const MAX_ATTEMPTS_PER_IP = 100;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 
-function attemptsFor(ip) {
+function attemptsFor(key) {
   const now = Date.now();
-  const rec = loginAttempts.get(ip);
+  const rec = loginAttempts.get(key);
   if (!rec || now - rec.first > ATTEMPT_WINDOW_MS) {
-    loginAttempts.set(ip, { count: 1, first: now });
+    loginAttempts.set(key, { count: 1, first: now });
     return 1;
   }
   rec.count += 1;
   return rec.count;
 }
 
-function clearAttempts(ip) {
-  loginAttempts.delete(ip);
+function clearAttempts(keys) {
+  for (const k of [].concat(keys)) loginAttempts.delete(k);
 }
+
+// Периодически убираем протухшие записи, иначе память растёт бесконечно.
+const attemptsSweep = setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of loginAttempts) {
+    if (now - v.first > ATTEMPT_WINDOW_MS) loginAttempts.delete(k);
+  }
+}, ATTEMPT_WINDOW_MS);
+if (attemptsSweep.unref) attemptsSweep.unref();
 
 // ------ Middleware авторизации ------
 const PUBLIC_PATHS = new Set(['/login', '/set-user', '/register', '/register-lab']);
@@ -408,8 +425,13 @@ app.post('/set-user', async (req, res) => {
   const password = req.body.password || '';
   const slug = (req.body.lab_slug || '').trim().toLowerCase();
   const ip = req.ip || 'unknown';
+  // Счётчик ведём по паре «адрес + сотрудник», а не только по адресу:
+  // за одним роутером сидит вся лаборатория, и общий счётчик на адрес
+  // блокировал бы вход сразу всем после пары чужих ошибок.
+  const ipKey = `ip:${ip}`;
+  const userKey = `user:${ip}:${slug}:${username}`;
 
-  if (attemptsFor(ip) > MAX_ATTEMPTS) {
+  if (attemptsFor(ipKey) > MAX_ATTEMPTS_PER_IP || attemptsFor(userKey) > MAX_ATTEMPTS) {
     return res.status(429).render('login', { error: 'Слишком много попыток. Подождите 15 минут.', preslug: slug });
   }
 
@@ -445,7 +467,7 @@ app.post('/set-user', async (req, res) => {
       return fail('Неверное имя, пароль или адрес лаборатории', 401);
     }
 
-    clearAttempts(ip);
+    clearAttempts([ipKey, userKey]);
     req.session.user = username;
     req.session.labId = labId;
     req.session.role = user.role;
