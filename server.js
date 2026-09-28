@@ -6,6 +6,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
+const { storage, uniqueName, BACKEND } = require('./src/services/storage');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,9 +29,6 @@ const publicDir = process.pkg
   : path.join(appRoot, 'public');
 
 console.log('Корневая папка приложения:', appRoot);
-
-// ------ Пароль для добавления новых пользователей ------
-const ADD_USER_PASSWORD = process.env.ADD_USER_PASSWORD || '545';
 
 // Пути к папкам для данных
 const uploadDir = path.join(appRoot, 'uploads');
@@ -83,7 +81,28 @@ function initDb() {
       created_by TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS labs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
+
+  // Разделение по лабораториям. lab_id есть в каждой таблице с данными,
+  // поэтому заказ одной лаборатории физически не виден другой.
+  // Значение по умолчанию 1 — чтобы старые данные остались рабочими.
+  const addColSafe = (table, name, def) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map(c => c.name);
+    if (!cols.includes(name)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`);
+      console.log(`Колонка ${table}.${name} добавлена`);
+    }
+  };
+  addColSafe('files', 'lab_id', 'INTEGER DEFAULT 1');
+  addColSafe('titan_orders', 'lab_id', 'INTEGER DEFAULT 1');
+  addColSafe('users', 'lab_id', 'INTEGER DEFAULT 1');
 
   // Проверка наличия устаревшей колонки и добавление (если нет)
   const fileCols = db.prepare("PRAGMA table_info(files)").all().map(c => c.name);
@@ -98,17 +117,27 @@ function initDb() {
   addCol('baked', 'BOOLEAN DEFAULT 0');
   addCol('comment', 'TEXT');
 
+  // Пользователей больше не создаём автоматически: имена сотрудников
+  // конкретной лаборатории не должны попадать в открытый репозиторий.
+  // Первая учётная запись создаётся при регистрации лаборатории.
+
+  // Пароль хранится только хэшем. Раньше пароля не было вовсе — на странице
+  // входа был выбор имени из списка, и это неприемлемо для внешних лабораторий.
+  addColSafe('users', 'password_hash', 'TEXT');
+  addColSafe('users', 'role', "TEXT DEFAULT 'tech'");
+  addColSafe('users', 'active', 'BOOLEAN DEFAULT 1');
+
   const userCount = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (userCount === 0) {
-    const defaultUsers = [
-      'София', 'Анна', 'Маргарита', 'Слава', 'Егор',
-      'Наталья', 'Мария', 'Сухроб', 'Абу', 'Альберт', 'Юлия'
-    ];
-    const insertUser = db.prepare('INSERT OR IGNORE INTO users (name) VALUES (?)');
-    for (const name of defaultUsers) {
-      insertUser.run(name);
-    }
-    console.log('Добавлены начальные пользователи');
+    console.log('Пользователей нет — создайте лабораторию через /register');
+  }
+
+  // Первая лаборатория создаётся автоматически, чтобы приложение
+  // сразу запускалось и не требовало ручной настройки.
+  const labCount = db.prepare('SELECT COUNT(*) AS n FROM labs').get().n;
+  if (labCount === 0) {
+    db.prepare('INSERT INTO labs (slug, name) VALUES (?, ?)').run('lab1', 'Лаборатория 1');
+    console.log('Создана лаборатория по умолчанию: lab1');
   }
 
   console.log('База данных SQLite проверена/создана');
@@ -186,27 +215,75 @@ app.set('view engine', 'ejs');
 app.set('views', viewsDir);
 
 // ------ Multer для загрузки файлов ------
-const storage = multer.diskStorage({
+// Файлы пишутся во временную папку, а не сразу в конечное место.
+// Причина: STL полной дуги весит 50-150 МБ, и держать их в памяти нельзя.
+// После загрузки storage.put() переносит файл в папку лаборатории
+// (или в облако, если STORAGE_BACKEND=s3).
+const tmpUploadDir = path.join(appRoot, 'tmp-uploads');
+if (!fs.existsSync(tmpUploadDir)) {
+  fs.mkdirSync(tmpUploadDir, { recursive: true });
+  console.log('Создана временная папка для загрузок:', tmpUploadDir);
+}
+
+const multerStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const userDir = path.join(uploadDir, req.session.user);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
-    }
-    cb(null, userDir);
+    const os = require('os');
+    cb(null, fs.mkdtempSync(path.join(os.tmpdir(), 'ztlab-')));
   },
   filename: (req, file, cb) => {
     const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    const safeName = path.basename(decodedName);
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const uniqueName = uniqueSuffix + '-' + safeName;
-    cb(null, uniqueName);
+    cb(null, uniqueName(decodedName));
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ storage: multerStorage });
+
+// ------ Хэширование паролей ------
+// scrypt из стандартной библиотеки Node: не нужно тянуть bcrypt,
+// и он устойчив к перебору. Формат: scrypt$<соль>$<хэш>
+const crypto = require('crypto');
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  const parts = stored.split('$');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+  const [, salt, hash] = parts;
+  const candidate = crypto.scryptSync(password, salt, 64);
+  const expected = Buffer.from(hash, 'hex');
+  if (candidate.length !== expected.length) return false;
+  return crypto.timingSafeEqual(candidate, expected);
+}
+
+// Защита от подбора пароля: не больше 10 попыток с одного адреса за 15 минут.
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 10;
+const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+
+function attemptsFor(ip) {
+  const now = Date.now();
+  const rec = loginAttempts.get(ip);
+  if (!rec || now - rec.first > ATTEMPT_WINDOW_MS) {
+    loginAttempts.set(ip, { count: 1, first: now });
+    return 1;
+  }
+  rec.count += 1;
+  return rec.count;
+}
+
+function clearAttempts(ip) {
+  loginAttempts.delete(ip);
+}
 
 // ------ Middleware авторизации ------
+const PUBLIC_PATHS = new Set(['/login', '/set-user', '/register', '/register-lab']);
+
 app.use((req, res, next) => {
-  if (req.path === '/login' || req.path === '/set-user' || req.path.startsWith('/public')) {
+  if (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/public')) {
     return next();
   }
   if (!req.session.user) {
@@ -215,32 +292,62 @@ app.use((req, res, next) => {
   next();
 });
 
+// Только администратор лаборатории (удаление файлов, пользователи).
+function requireAdmin(req, res, next) {
+  if (!req.session.user || req.session.role !== 'admin') {
+    return res.status(403).send('Недостаточно прав');
+  }
+  next();
+}
+
 // ------ Маршруты ------
 
 // Страница входа
 app.get('/login', async (req, res) => {
-  try {
-    const result = query('SELECT name FROM users ORDER BY name');
-    const users = result.rows.map(row => row.name);
-    res.render('login', { users });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Ошибка БД');
-  }
+  res.render('login', { error: null });
 });
 
+// Страница регистрации лаборатории
+app.get('/register', async (req, res) => {
+  res.render('register', { error: null });
+});
+
+// Вход по имени и паролю. Раньше пароля не было: на странице входа был
+// выбор имени из списка, что неприемлемо, когда в системе чужие лаборатории.
 app.post('/set-user', async (req, res) => {
-  const username = req.body.username;
+  const username = (req.body.username || '').trim();
+  const password = req.body.password || '';
+  const ip = req.ip || 'unknown';
+
+  if (attemptsFor(ip) > MAX_ATTEMPTS) {
+    return res.status(429).render('login', { error: 'Слишком много попыток. Подождите 15 минут.' });
+  }
+
   try {
-    const result = query('SELECT name FROM users WHERE name = ?', [username]);
+    const result = query(
+      'SELECT * FROM users WHERE name = ? AND lab_id = ?',
+      [username, req.session.labId || 1]
+    );
     if (result.rows.length === 0) {
-      return res.redirect('/login');
+      return res.status(401).render('login', { error: 'Неверное имя или пароль' });
     }
+
+    const user = result.rows[0];
+    if (!user.active) {
+      return res.status(403).render('login', { error: 'Учётная запись отключена' });
+    }
+    if (!verifyPassword(password, user.password_hash)) {
+      return res.status(401).render('login', { error: 'Неверное имя или пароль' });
+    }
+
+    clearAttempts(ip);
     req.session.user = username;
+    req.session.labId = user.lab_id;
+    req.session.role = user.role;
     res.redirect('/');
   } catch (err) {
     console.error(err);
-    res.redirect('/login');
+    res.status(500).send('Ошибка сервера');
   }
 });
 
@@ -249,17 +356,59 @@ app.get('/logout', (req, res) => {
   res.redirect('/login');
 });
 
+// Регистрация новой лаборатории. Создаёт лабораторию и первого
+// администратора за один шаг, чтобы не пришлось настраивать вручную.
+app.post('/register-lab', async (req, res) => {
+  const labName = (req.body.lab_name || '').trim();
+  const userName = (req.body.username || '').trim();
+  const password = req.body.password || '';
+
+  if (!labName) return res.status(400).send('Укажите название лаборатории');
+  if (!userName) return res.status(400).send('Укажите имя пользователя');
+  if (password.length < 6) return res.status(400).send('Пароль короче 6 символов');
+
+  try {
+    let slug = (req.body.slug || '').trim().toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!slug) slug = 'lab-' + Date.now().toString(36);
+
+    const exists = query('SELECT id FROM labs WHERE slug = ?', [slug]).rows;
+    if (exists.length > 0) {
+      return res.status(409).send('Такая лаборатория уже зарегистрирована');
+    }
+
+    query('INSERT INTO labs (slug, name) VALUES (?, ?)', [slug, labName]);
+    const labId = db.prepare('SELECT id FROM labs WHERE slug = ?').get(slug).id;
+
+    query(
+      'INSERT INTO users (name, password_hash, role, active, lab_id) VALUES (?, ?, ?, 1, ?)',
+      [userName, hashPassword(password), 'admin', labId]
+    );
+
+    req.session.user = userName;
+    req.session.labId = labId;
+    req.session.role = 'admin';
+    res.redirect('/');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Ошибка при регистрации');
+  }
+});
+
 // Главная страница (с перенаправлением для Елены и динамическим поиском)
 app.get('/', async (req, res) => {
-  if (req.session.user === 'Елена') {
-    return res.redirect('/titan');
-  }
-
   const { date, uploader, downloaded, filename } = req.query;
 
   let sql = 'SELECT * FROM files';
   const params = [];
   const conditions = [];
+
+  // Ограничение по лаборатории добавляется первым условием и всегда:
+  // без него заказы других лабораторий были бы видны.
+  const labId = req.session.labId || 1;
+  conditions.push('lab_id = ?');
+  params.push(labId);
 
   if (date) {
     conditions.push('substr(upload_date, 1, 10) = ?');
@@ -320,7 +469,7 @@ app.get('/', async (req, res) => {
         return month;
       });
 
-    const uploadersResult = query('SELECT DISTINCT uploader FROM files');
+    const uploadersResult = query('SELECT DISTINCT uploader FROM files WHERE lab_id = ?', [req.session.labId || 1]);
     const uploaders = uploadersResult.rows.map(row => row.uploader);
 
     res.render('index', {
@@ -348,31 +497,61 @@ app.post('/upload', upload.fields([
 
   const stlFiles = req.files['stlFiles'];
   const imageFile = req.files['imageFile'] ? req.files['imageFile'][0] : null;
-  let imageName = imageFile ? imageFile.filename : null;
 
   const uploader = req.session.user;
+  const labId = req.session.labId || 1;
   const uploadDate = new Date().toISOString();
   const milled = req.body.milled === 'on';
   const baked = req.body.baked === 'on';
   const comment = req.body.comment || '';
 
-  const client = db;
+  const tmpDirs = new Set();
+  const collectTmp = (f) => {
+    if (f && f.path) {
+      tmpDirs.add(path.dirname(f.path));
+      if (f.filename) f.savedAs = f.filename;
+    }
+  };
+  stlFiles.forEach(collectTmp);
+  collectTmp(imageFile);
+
   try {
+    // Переносим файлы из временной папки в хранилище лаборатории.
+    // При STORAGE_BACKEND=s3 это единственное место, где идёт загрузка.
+    let imageName = null;
+    if (imageFile) {
+      imageName = await storage.put(imageFile.path, labId, imageFile.savedAs);
+    }
+    const stlRows = [];
+    for (const f of stlFiles) {
+      const savedAs = await storage.put(f.path, labId, f.savedAs);
+      stlRows.push([Buffer.from(f.originalname, 'latin1').toString('utf8'), savedAs]);
+    }
+
     const insertStmt = db.prepare(
-      `INSERT INTO files 
-       (original_name, stored_name, image_name, uploader, upload_date, downloaded, milled, baked, comment) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO files
+       (original_name, stored_name, image_name, uploader, upload_date, downloaded, milled, baked, comment, lab_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const insertAll = db.transaction((rows) => {
       for (const [decodedStlName, storedStlName] of rows) {
-        insertStmt.run(decodedStlName, storedStlName, imageName, uploader, uploadDate, 0, milled ? 1 : 0, baked ? 1 : 0, comment);
+        insertStmt.run(decodedStlName, storedStlName, imageName, uploader, uploadDate, 0, milled ? 1 : 0, baked ? 1 : 0, comment, labId);
       }
     });
-    insertAll(stlFiles.map(f => [Buffer.from(f.originalname, 'latin1').toString('utf8'), f.filename]));
+    insertAll(stlRows);
     res.redirect('/');
   } catch (err) {
     console.error('Ошибка при загрузке файлов:', err);
     res.status(500).send('Ошибка при сохранении в БД.');
+  } finally {
+    // Временные папки убираем в любом случае, иначе они разрастаются.
+    for (const d of tmpDirs) {
+      try {
+        fs.rmSync(d, { recursive: true, force: true });
+      } catch (e) {
+        console.error('Не удалось убрать временную папку:', d, e.message);
+      }
+    }
   }
 });
 
@@ -382,7 +561,7 @@ app.get('/download/:id', async (req, res) => {
   const downloader = req.session.user;
 
   try {
-    const fileResult = query('SELECT * FROM files WHERE id = ?', [fileId]);
+    const fileResult = query('SELECT * FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
     if (fileResult.rows.length === 0) {
       return res.status(404).send('Файл не найден.');
     }
@@ -398,21 +577,20 @@ app.get('/download/:id', async (req, res) => {
     if (!file.downloaded) {
       const downloadDate = new Date().toISOString();
       query(
-        'UPDATE files SET downloaded = 1, downloaded_by = ?, downloaded_date = ? WHERE id = ?',
-        [downloader, downloadDate, fileId]
+        'UPDATE files SET downloaded = 1, downloaded_by = ?, downloaded_date = ? WHERE id = ? AND lab_id = ?',
+        [downloader, downloadDate, fileId, req.session.labId || 1]
       );
     } else {
       const newList = updateDownloaders(file.downloaded_by, downloader);
       if (newList !== file.downloaded_by) {
         query(
-          'UPDATE files SET downloaded_by = ? WHERE id = ?',
-          [newList, fileId]
+          'UPDATE files SET downloaded_by = ? WHERE id = ? AND lab_id = ?',
+          [newList, fileId, req.session.labId || 1]
         );
       }
     }
 
-    const filePath = path.join(uploadDir, file.uploader, file.stored_name);
-    res.download(filePath, file.original_name);
+    await storage.sendFile(res, file.lab_id || 1, file.stored_name, file.original_name);
   } catch (err) {
     console.error(err);
     res.status(500).send('Ошибка сервера');
@@ -434,17 +612,17 @@ const imageMime = {
 app.get('/image/:id', async (req, res) => {
   const fileId = req.params.id;
   try {
-    const result = query('SELECT image_name, uploader FROM files WHERE id = ?', [fileId]);
+    const result = query('SELECT image_name, uploader FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
     if (result.rows.length === 0 || !result.rows[0].image_name) {
       return res.status(404).send('Изображение не найдено.');
     }
     const file = result.rows[0];
-    const imagePath = path.join(uploadDir, file.uploader, file.image_name);
     const ext = path.extname(file.image_name).toLowerCase();
     const contentType = imageMime[ext] || 'image/png';
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline');
-    res.sendFile(imagePath);
+    const imgPath = await storage.pathFor(file.lab_id || 1, file.image_name);
+    res.sendFile(imgPath);
   } catch (err) {
     console.error(err);
     res.status(500).send('Ошибка сервера');
@@ -455,13 +633,12 @@ app.get('/image/:id', async (req, res) => {
 app.get('/download-image/:id', async (req, res) => {
   const fileId = req.params.id;
   try {
-    const result = query('SELECT image_name, uploader, original_name FROM files WHERE id = ?', [fileId]);
+    const result = query('SELECT image_name, uploader, original_name FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
     if (result.rows.length === 0 || !result.rows[0].image_name) {
       return res.status(404).send('Изображение не найдено.');
     }
     const file = result.rows[0];
-    const imagePath = path.join(uploadDir, file.uploader, file.image_name);
-    res.download(imagePath, file.original_name);
+    await storage.sendFile(res, file.lab_id || 1, file.image_name, file.original_name);
   } catch (err) {
     console.error(err);
     res.status(500).send('Ошибка сервера');
@@ -478,25 +655,22 @@ app.post('/delete/:id', async (req, res) => {
   }
 
   try {
-    const fileResult = query('SELECT * FROM files WHERE id = ?', [fileId]);
+    const fileResult = query('SELECT * FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
     if (fileResult.rows.length === 0) {
       return res.status(404).send('Файл не найден');
     }
     const file = fileResult.rows[0];
 
-    const stlPath = path.join(uploadDir, file.uploader, file.stored_name);
-    fs.unlink(stlPath, (err) => {
-      if (err) console.error('Ошибка удаления STL:', err);
-    });
-
-    if (file.image_name) {
-      const imagePath = path.join(uploadDir, file.uploader, file.image_name);
-      fs.unlink(imagePath, (err) => {
-        if (err) console.error('Ошибка удаления изображения:', err);
-      });
+    try {
+      await storage.remove(file.lab_id || 1, file.stored_name);
+      if (file.image_name) {
+        await storage.remove(file.lab_id || 1, file.image_name);
+      }
+    } catch (err) {
+      console.error('Ошибка удаления файлов:', err);
     }
 
-    await query('DELETE FROM files WHERE id = ?', [fileId]);
+    await query('DELETE FROM files WHERE id = ? AND lab_id = ?', [fileId, req.session.labId || 1]);
     res.redirect('/');
   } catch (err) {
     console.error(err);
@@ -508,7 +682,7 @@ app.post('/delete/:id', async (req, res) => {
 app.post('/toggle-milled/:id', async (req, res) => {
   if (!req.session.user) return res.status(401).send('Не авторизован');
   try {
-    await query('UPDATE files SET milled = NOT milled WHERE id = ?', [req.params.id]);
+    await query('UPDATE files SET milled = NOT milled WHERE id = ? AND lab_id = ?', [req.params.id, req.session.labId || 1]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -519,7 +693,7 @@ app.post('/toggle-milled/:id', async (req, res) => {
 app.post('/toggle-baked/:id', async (req, res) => {
   if (!req.session.user) return res.status(401).send('Не авторизован');
   try {
-    await query('UPDATE files SET baked = NOT baked WHERE id = ?', [req.params.id]);
+    await query('UPDATE files SET baked = NOT baked WHERE id = ? AND lab_id = ?', [req.params.id, req.session.labId || 1]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -531,7 +705,7 @@ app.post('/comment/:id', async (req, res) => {
   if (!req.session.user) return res.status(401).send('Не авторизован');
   const { comment } = req.body;
   try {
-    await query('UPDATE files SET comment = ? WHERE id = ?', [comment, req.params.id]);
+    await query('UPDATE files SET comment = ? WHERE id = ? AND lab_id = ?', [comment, req.params.id, req.session.labId || 1]);
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -545,24 +719,32 @@ app.get('/add-user', (req, res) => {
   res.render('add-user', { error: null });
 });
 
-app.post('/add-user', async (req, res) => {
-  if (!req.session.user) return res.redirect('/login');
+// Добавление сотрудника в лабораторию. Только администратор.
+app.post('/add-user', requireAdmin, async (req, res) => {
+  const { password, newUsername, role } = req.body;
+  const name = (newUsername || '').trim();
 
-  const { password, newUsername } = req.body;
-  if (password !== ADD_USER_PASSWORD) {
-    return res.render('add-user', { error: 'Неверный пароль' });
-  }
-
-  if (!newUsername || newUsername.trim() === '') {
+  if (!name) {
     return res.render('add-user', { error: 'Имя не может быть пустым' });
   }
+  if (!password || password.length < 6) {
+    return res.render('add-user', { error: 'Пароль должен быть не короче 6 символов' });
+  }
+
+  const newRole = role === 'admin' ? 'admin' : 'tech';
 
   try {
-    const existing = query('SELECT id FROM users WHERE name = ?', [newUsername.trim()]).rows;
+    const existing = query(
+      'SELECT id FROM users WHERE name = ? AND lab_id = ?',
+      [name, req.session.labId || 1]
+    ).rows;
     if (existing.length > 0) {
       return res.render('add-user', { error: 'Пользователь с таким именем уже существует' });
     }
-    query('INSERT INTO users (name) VALUES (?)', [newUsername.trim()]);
+    query(
+      'INSERT INTO users (name, password_hash, role, active, lab_id) VALUES (?, ?, ?, 1, ?)',
+      [name, hashPassword(password), newRole, req.session.labId || 1]
+    );
     res.redirect('/');
   } catch (err) {
     console.error(err);
@@ -579,6 +761,10 @@ app.get('/titan', async (req, res) => {
     let sql = 'SELECT * FROM titan_orders';
     const params = [];
     const conditions = [];
+
+    // Фильтр по лаборатории добавляется всегда, до остальных условий.
+    conditions.push('lab_id = ?');
+    params.push(req.session.labId || 1);
 
     if (order_number && order_number.trim() !== '') {
       conditions.push(`order_number LIKE ?`);
@@ -654,14 +840,16 @@ app.get('/titan', async (req, res) => {
         return month;
       });
 
-    const isElena = (req.session.user === 'Елена');
+    // Доступ к титановым основаниям — у администратора лаборатории.
+    // Раньше это определялось именем «Елена», что не переносилось на другие лаборатории.
+    const isAdmin = (req.session.role === 'admin');
 
     res.render('titan', {
       orders: orders,
       groupedOrders: groupedOrders,
       todayKey: todayKey, // передаём исправленную дату
       currentUser: req.session.user,
-      isElena: isElena,
+      isAdmin: isAdmin,
       filters: { order_number, status, date_from, date_to }
     });
   } catch (err) {
@@ -697,8 +885,8 @@ app.post('/titan/add', async (req, res) => {
   try {
     const insertStmt = db.prepare(
       `INSERT INTO titan_orders 
-       (order_date, order_number, system_name, size, has_hex, created_by) 
-       VALUES (?, ?, ?, ?, ?, ?)`
+       (order_date, order_number, system_name, size, has_hex, created_by, lab_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
     const insertAll = db.transaction((rows) => {
       for (const item of rows) {
@@ -712,7 +900,8 @@ app.post('/titan/add', async (req, res) => {
           item.system_name,
           sizeValue,
           item.has_hex === true || item.has_hex === 'on' ? 1 : 0,
-          req.session.user
+          req.session.user,
+          req.session.labId || 1
         );
       }
     });
@@ -724,17 +913,17 @@ app.post('/titan/add', async (req, res) => {
   }
 });
 
-// Переключение статуса (только Елена)
-app.post('/titan/toggle-status/:id', async (req, res) => {
-  if (req.session.user !== 'Елена') {
+// Переключение статуса основания — только для администратора лаборатории
+app.post('/titan/toggle-status/:id', requireAdmin, async (req, res) => {
+  if (req.session.role !== 'admin') {
     return res.status(403).json({ success: false, message: 'Доступ запрещён' });
   }
   const id = req.params.id;
   try {
-    const current = query('SELECT status FROM titan_orders WHERE id = ?', [id]);
+    const current = query('SELECT status FROM titan_orders WHERE id = ? AND lab_id = ?', [id, req.session.labId || 1]);
     if (current.rows.length === 0) return res.status(404).json({ success: false });
     const newStatus = current.rows[0].status === 'pending' ? 'issued' : 'pending';
-    await query('UPDATE titan_orders SET status = ? WHERE id = ?', [newStatus, id]);
+    await query('UPDATE titan_orders SET status = ? WHERE id = ? AND lab_id = ?', [newStatus, id, req.session.labId || 1]);
     res.json({ success: true, newStatus });
   } catch (err) {
     console.error(err);
@@ -749,6 +938,10 @@ app.get('/titan/export', async (req, res) => {
     let sql = 'SELECT * FROM titan_orders';
     const params = [];
     const conditions = [];
+
+    // Фильтр по лаборатории добавляется всегда, до остальных условий.
+    conditions.push('lab_id = ?');
+    params.push(req.session.labId || 1);
 
     if (order_number && order_number.trim() !== '') {
       conditions.push(`order_number LIKE ?`);
@@ -844,6 +1037,10 @@ app.get('/titan/print', async (req, res) => {
     let sql = 'SELECT * FROM titan_orders';
     const params = [];
     const conditions = [];
+
+    // Фильтр по лаборатории добавляется всегда, до остальных условий.
+    conditions.push('lab_id = ?');
+    params.push(req.session.labId || 1);
 
     if (order_number) {
       conditions.push(`order_number LIKE ?`);

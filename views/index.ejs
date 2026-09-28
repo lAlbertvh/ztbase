@@ -346,7 +346,7 @@
     <h1 class="page-header">Хранилище 3D-файлов 
         <span style="font-size: 0.7em;">(вы вошли как <strong><%= currentUser %></strong>)</span>
         <span class="header-buttons">
-            <% if (currentUser !== 'Елена') { %>
+            <% if (isAdmin) { %>
                 <a href="/titan" class="add-user-btn" style="background-color: #FF9800;">🔩 Титановые основания</a>
             <% } %>
             <a href="/add-user" class="add-user-btn">➕ Добавить пользователя</a>

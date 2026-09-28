@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4CAF50">
+    <link rel="icon" href="/icons/icon-192.png">
+    <title>Регистрация лаборатории — ZT Lab</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; padding: 16px; }
+        .container { max-width: 420px; width: 100%; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h1 { text-align: center; font-size: 21px; color: #333; margin-top: 0; }
+        p.hint { font-size: 13px; color: #777; text-align: center; }
+        input, button { width: 100%; padding: 12px; margin: 6px 0; font-size: 16px; border-radius: 6px; }
+        input { border: 1px solid #ccc; }
+        button { background: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background: #45a049; }
+        .muted { color: #777; font-size: 13px; text-align: center; margin-top: 18px; }
+        .muted a { color: #4CAF50; }
+        label { font-size: 13px; color: #555; display: block; margin-bottom: 2px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Регистрация лаборатории</h1>
+        <p class="hint">Данные каждой лаборатории изолированы и никому не видны.</p>
+        <form method="post" action="/register-lab">
+            <label for="lab_name">Название лаборатории</label>
+            <input type="text" id="lab_name" name="lab_name" required placeholder="Зуботехническая лаборатория">
+
+            <label for="slug">Адрес в системе (латиницей)</label>
+            <input type="text" id="slug" name="slug" placeholder="lab-ivanova">
+
+            <label for="username">Ваше имя</label>
+            <input type="text" id="username" name="username" required autocomplete="username">
+
+            <label for="password">Пароль (не короче 6 символов)</label>
+            <input type="password" id="password" name="password" required minlength="6" autocomplete="new-password">
+
+            <button type="submit">Создать лабораторию</button>
+        </form>
+        <div class="muted">Уже есть доступ? <a href="/login">Войти</a></div>
+    </div>
+</body>
+</html>

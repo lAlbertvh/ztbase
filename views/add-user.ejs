@@ -13,7 +13,7 @@
         .container { max-width: 400px; width: 100%; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         h1 { text-align: center; font-size: 22px; color: #333; }
         input, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border-radius: 6px; }
-        input { border: 1px solid #ccc; }
+        input, select { border: 1px solid #ccc; }
         button { background: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background: #45a049; }
         .error { color: #d32f2f; background: #ffebee; padding: 10px; border-radius: 6px; }
@@ -28,8 +28,12 @@
             <p class="error"><%= error %></p>
         <% } %>
         <form method="post" action="/add-user">
-            <input type="password" name="password" placeholder="Пароль (545)" required>
-            <input type="text" name="newUsername" placeholder="Имя нового пользователя" required>
+            <input type="text" name="newUsername" placeholder="Имя сотрудника" required>
+            <input type="password" name="password" placeholder="Пароль сотрудника" required minlength="6">
+            <select name="role">
+                <option value="tech">Техник</option>
+                <option value="admin">Администратор</option>
+            </select>
             <button type="submit">Добавить</button>
         </form>
         <div class="back"><a href="/">← Вернуться на главную</a></div>

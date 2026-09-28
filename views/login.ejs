@@ -6,31 +6,37 @@
     <meta name="theme-color" content="#4CAF50">
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/icons/icon-192.png">
-    <title>Вход в систему</title>
+    <title>Вход — ZT Lab</title>
     <style>
         * { box-sizing: border-box; }
         body { font-family: Arial, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; padding: 16px; }
         .container { max-width: 400px; width: 100%; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        h1 { text-align: center; font-size: 22px; color: #333; }
-        select, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border-radius: 6px; }
-        select { border: 1px solid #ccc; }
+        h1 { text-align: center; font-size: 22px; color: #333; margin-top: 0; }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; border-radius: 6px; }
+        input { border: 1px solid #ccc; }
         button { background: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background: #45a049; }
-        button:focus, select:focus { outline: 2px solid #4CAF50; }
+        button:focus, input:focus { outline: 2px solid #4CAF50; }
+        .error { background: #ffebee; color: #c62828; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 14px; }
+        .muted { color: #777; font-size: 13px; text-align: center; margin-top: 20px; }
+        .muted a { color: #4CAF50; }
+        label { font-size: 13px; color: #555; display: block; margin-bottom: 2px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Выбор пользователя</h1>
+        <h1>Вход в систему</h1>
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="error"><%= error %></div>
+        <% } %>
         <form method="post" action="/set-user">
-            <select name="username" required>
-                <option value="">-- Выберите имя --</option>
-                <% users.forEach(user => { %>
-                    <option value="<%= user %>"><%= user %></option>
-                <% }); %>
-            </select>
+            <label for="username">Имя</label>
+            <input type="text" id="username" name="username" required autocomplete="username" autofocus>
+            <label for="password">Пароль</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password">
             <button type="submit">Войти</button>
         </form>
+        <div class="muted">Новая лаборатория? <a href="/register">Зарегистрироваться</a></div>
     </div>
     <script>
         if ('serviceWorker' in navigator) {
