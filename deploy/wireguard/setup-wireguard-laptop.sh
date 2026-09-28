@@ -63,7 +63,12 @@ chmod 600 "/etc/wireguard/${WG_IF}.conf"
 # на разрешение имён в обычном интернете.
 
 log "Запускаю туннель"
-systemctl enable --now "wg-quick@${WG_IF}"
+# Именно restart, а не enable --now: если интерфейс уже поднят
+# со старой конфигурацией, enable --now ничего не делает, и новые
+# настройки в туннель не попадают. Из-за этого ноутбук молча
+# оставался на прежних ключах и не начинал рукопожатие.
+systemctl enable "wg-quick@${WG_IF}"
+systemctl restart "wg-quick@${WG_IF}"
 sleep 3
 
 log "Проверяю связь с VPS"
