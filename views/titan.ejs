@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FF9800">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/icons/icon-192.png">
+    <title>Учёт титановых оснований</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background-color: #FF9800;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-pending {
+            background-color: #ffc107;
+            color: #333;
+        }
+        .status-issued {
+            background-color: #28a745;
+            color: white;
+        }
+        .filter-form, .upload-form {
+            background: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .filter-form label, .upload-form label {
+            margin-right: 15px;
+        }
+        .filter-form input, .filter-form select,
+        .upload-form input, .upload-form select {
+            padding: 5px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .filter-form button, .upload-form button {
+            padding: 6px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .filter-form button:hover, .upload-form button:hover {
+            background-color: #45a049;
+        }
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .header-buttons {
+            display: inline-flex;
+            align-items: stretch;
+            gap: 10px;
+            margin-left: auto;
+        }
+        .btn {
+            display: inline-block;
+            padding: 8px 16px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-green {
+            background-color: #4CAF50;
+        }
+        .btn-orange {
+            background-color: #FF9800;
+        }
+        .btn-print {
+            background-color: #607D8B;
+        }
+        .logout {
+            background-color: #f44336;
+        }
+        .group-month-row td,
+        .group-day-row td {
+            border: 1px solid #c8e6c9;
+        }
+        .group-month-row {
+            background: #e8f5e9;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .group-month-row:hover {
+            background: #c8e6c9;
+        }
+        .group-day-row {
+            background: #f1f8e9;
+            cursor: pointer;
+            user-select: none;
+        }
+        .group-day-row:hover {
+            background: #dcedc8;
+        }
+        .group-day-row.day-today {
+            background: #fff9c4;
+        }
+        .group-toggle {
+            display: inline-block;
+            width: 18px;
+            text-align: center;
+            margin-right: 6px;
+        }
+        .group-row-hidden {
+            display: none;
+        }
+        .reset-link {
+            margin-left: 10px;
+        }
+        .item-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .item-row select, .item-row input[type="number"] {
+            width: 200px;
+        }
+        .remove-item {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .add-item {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        /* ===== Адаптивность для телефонов ===== */
+        @media (max-width: 768px) {
+            body { margin: 10px; font-size: 14px; }
+            .page-header { flex-direction: column; align-items: flex-start; }
+            .header-buttons { width: 100%; flex-wrap: wrap; justify-content: flex-start; margin-top: 10px; }
+            .header-buttons .btn { flex: 1 1 45%; text-align: center; padding: 10px 4px; font-size: 12px; margin: 2px; box-sizing: border-box; }
+            .upload-form, .filter-form { padding: 12px; }
+            .filter-form label { display: block; margin-bottom: 8px; }
+            .filter-form input, .filter-form select, .upload-form input, .upload-form select { max-width: 100%; width: 100%; box-sizing: border-box; }
+            .item-row { flex-direction: column; align-items: stretch; }
+            .item-row select, .item-row input[type="number"] { width: 100%; box-sizing: border-box; }
+            /* Таблица -> карточки */
+            table, thead, tbody, th, td, tr { display: block; }
+            thead { display: none; }
+            tr { margin-bottom: 8px; }
+            .group-month-row, .group-day-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-weight: bold;
+            }
+            .group-day-row span.group-toggle { margin-left: 0 !important; }
+            .order-row {
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 6px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                background: #fff;
+            }
+            table td {
+                border: none;
+                border-bottom: 1px solid #eee;
+                padding: 6px 8px;
+                text-align: left;
+                position: relative;
+                padding-left: 110px;
+            }
+            table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 8px;
+                width: 95px;
+                font-weight: bold;
+                color: #666;
+            }
+            table td:not([data-label]) { padding-left: 8px; }
+        }
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1>🔩 Учёт титановых оснований</h1>
+        <div class="header-buttons">
+            <!-- ИСПРАВЛЕННАЯ ССЫЛКА EXCEL -->
+            <a href="/titan/export?order_number=<%= encodeURIComponent(filters.order_number || '') %>&status=<%= encodeURIComponent(filters.status && filters.status !== 'all' ? filters.status : '') %>&date_from=<%= encodeURIComponent(filters.date_from || '') %>&date_to=<%= encodeURIComponent(filters.date_to || '') %>" class="btn btn-green">📊 Excel</a>
+            <a href="/titan/print" target="_blank" class="btn btn-print">🖨️ Печать всех</a>
+            <a href="/" class="btn btn-orange">📁 Файлы</a>
+            <a href="/add-user" class="btn">➕ Пользователя</a>
+            <a href="/logout" class="btn logout">Выйти</a>
+        </div>
+    </div>
+
+    <!-- Форма добавления с динамическими полями -->
+    <div class="upload-form">
+        <h3>Добавить позиции в наряд</h3>
+        <form id="titanForm" action="/titan/add" method="POST">
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px;">
+                <label>
+                    Дата:
+                    <input type="date" name="order_date" value="<%= new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0,10) %>">
+                </label>
+                <label>
+                    Номер наряда:
+                    <input type="text" name="order_number" required placeholder="Введите номер">
+                </label>
+            </div>
+
+            <div id="items-container">
+                <!-- Первая позиция -->
+                <div class="item-row" data-index="0">
+                    <select name="items[0][system_name]" required>
+                        <option value="">-- Система --</option>
+                        <option value="ti-base bell(geo) implantium">ti-base bell(geo) implantium</option>
+                        <option value="ti-base bell(geo) miss sp">ti-base bell(geo) miss sp</option>
+                        <option value="ti-base bell(geo) neobiotech">ti-base bell(geo) neobiotech</option>
+                        <option value="ti-base bell(geo) osstem regular">ti-base bell(geo) osstem regular</option>
+                        <option value="ti-base bell(geo) osstem mini">ti-base bell(geo) osstem mini</option>
+                        <option value="ti-base bell(geo) astra 4.5-5.0">ti-base bell(geo) astra 4.5-5.0</option>
+                        <option value="ti-base bell(geo) astra 3.5-4.0">ti-base bell(geo) astra 3.5-4.0</option>
+                        <option value="ti-base bell(geo) nobel mu">ti-base bell(geo) nobel mu</option>
+                        <option value="ti-base bell(geo) osstem mu">ti-base bell(geo) osstem mu</option>
+                        <option value="ti-base bell(geo) implantium mu">ti-base bell(geo) implantium mu</option>
+                        <option value="ti-base bell(geo) megagen anyridge">ti-base bell(geo) megagen anyridge</option>
+                        <option value="ti-base bell(geo) nobel active rp">ti-base bell(geo) nobel active rp</option>
+                        <option value="ti-base bell(geo) nobel active np">ti-base bell(geo) nobel active np</option>
+                        <option value="ti-base bell(geo) osstem comocta 4.8">ti-base bell(geo) osstem comocta 4.8</option>
+                        <option value="ti-base bell(geo) osstem comocta 6.0">ti-base bell(geo) osstem comocta 6.0</option>
+                        <option value="ti-base flat ankylos">ti-base flat ankylos</option>
+                        <option value="ti-base flat medentika">ti-base flat medentika</option>
+                    </select>
+                    <input type="number" name="items[0][size]" placeholder="Размер" step="0.1" min="0" required>
+                    <label>
+                        <input type="checkbox" name="items[0][has_hex]"> С позиционером
+                    </label>
+                    <button type="button" class="remove-item" onclick="removeItem(this)" style="display:none;">✖</button>
+                </div>
+            </div>
+
+            <button type="button" class="add-item" onclick="addItem()">➕ Добавить ещё позицию</button>
+            <br><br>
+            <button type="submit" class="btn btn-green">💾 Принять</button>
+        </form>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="filter-form">
+        <h3>Фильтры</h3>
+        <form method="get" id="filterForm">
+            <label>
+                Номер наряда:
+                <input type="text" name="order_number" value="<%= filters.order_number || '' %>" placeholder="Часть номера">
+            </label>
+            <label>
+                Статус:
+                <select name="status">
+                    <option value="all" <%= filters.status === 'all' ? 'selected' : '' %>>Все</option>
+                    <option value="pending" <%= filters.status === 'pending' ? 'selected' : '' %>>Не выдано</option>
+                    <option value="issued" <%= filters.status === 'issued' ? 'selected' : '' %>>Выдано</option>
+                </select>
+            </label>
+            <label>
+                Дата с:
+                <input type="date" name="date_from" id="date_from" value="<%= filters.date_from || '' %>">
+            </label>
+            <label>
+                по:
+                <input type="date" name="date_to" id="date_to" value="<%= filters.date_to || '' %>">
+            </label>
+            <button type="submit">Применить</button>
+            
+            <!-- Кнопка печати по датам (только date_from/date_to) -->
+            <button type="button" id="printDayBtn" class="btn btn-print">🖨️ Печать за период</button>
+            
+            <!-- Кнопка печати по всем фильтрам (номер, статус, даты) -->
+            <button type="button" id="printWithFiltersBtn" class="btn btn-print">🖨️ Печать по фильтру</button>
+            
+            <a href="/titan" class="reset-link">Сбросить</a>
+        </form>
+    </div>
+
+    <!-- Таблица записей -->
+    <h2>Список заказов</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Дата</th>
+                <th>Наряд</th>
+                <th>Система</th>
+                <th>Размер</th>
+                <th>Позиционер</th>
+                <th>Статус</th>
+                <th>Техник</th>
+                <% if (isElena) { %>
+                <th>Действие</th>
+                <% } %>
+            </tr>
+        </thead>
+        <tbody id="ordersTableBody">
+            <% if (orders.length === 0) { %>
+                <tr><td colspan="<%= isElena ? 8 : 7 %>" style="text-align:center;">Нет записей</td></tr>
+            <% } else { %>
+                <% groupedOrders.forEach(month => { %>
+                    <tr class="group-month-row" data-group="month" data-month-key="<%= month.monthKey %>">
+                        <td colspan="<%= isElena ? 8 : 7 %>"><span class="group-toggle" data-month-key="<%= month.monthKey %>">▼</span><%= month.monthLabel %></td>
+                    </tr>
+                    <% month.daysList.forEach(day => { %>
+                        <tr class="group-day-row <%= day.isToday ? 'day-today' : '' %>" data-group="day" data-month-key="<%= month.monthKey %>" data-day-key="<%= day.dateKey %>" data-today="<%= day.isToday ? '1' : '0' %>">
+                            <td colspan="<%= isElena ? 8 : 7 %>"><span class="group-toggle" style="margin-left: 20px;" data-day-key="<%= day.dateKey %>">▼</span><%= day.dayLabel %><% if (day.isToday) { %> <em>(сегодня)</em><% } %></td>
+                        </tr>
+                        <% day.orders.forEach(order => { %>
+                            <tr class="order-row" data-group="file" data-month-key="<%= month.monthKey %>" data-day-key="<%= day.dateKey %>">
+                                <td data-label="Дата"><%= order.order_date %></td>
+                                <td data-label="Наряд">
+                                    <%= order.order_number %>
+                                    <a href="/titan/print?order_number=<%= encodeURIComponent(order.order_number) %>" target="_blank" style="margin-left: 5px; text-decoration: none; color: #607D8B;" title="Печать наряда">🖨️</a>
+                                </td>
+                                <td data-label="Система"><%= order.system_name %></td>
+                                <td data-label="Размер"><%= order.size %></td>
+                                <td data-label="Позиционер"><%= order.has_hex ? 'Да' : 'Нет' %></td>
+                                <td data-label="Статус">
+                                    <span class="status-badge <%= order.status === 'pending' ? 'status-pending' : 'status-issued' %>">
+                                        <%= order.status === 'pending' ? 'Не выдано' : 'Выдано' %>
+                                    </span>
+                                </td>
+                                <td data-label="Техник"><%= order.created_by || '-' %></td>
+                                <% if (isElena) { %>
+                                <td data-label="Действие">
+                                    <button class="btn" onclick="toggleStatus(<%= order.id %>, '<%= order.status %>')">
+                                        <%= order.status === 'pending' ? 'Выдать' : 'Вернуть' %>
+                                    </button>
+                                </td>
+                                <% } %>
+                            </tr>
+                        <% }); %>
+                    <% }); %>
+                <% }); %>
+            <% } %>
+        </tbody>
+    </table>
+
+    <script>
+        // Сворачивание по месяцам и дням
+        (function() {
+            const tbody = document.getElementById('ordersTableBody');
+            if (!tbody) return;
+
+            tbody.addEventListener('click', function(e) {
+                const row = e.target.closest('tr');
+                if (!row) return;
+                const group = row.getAttribute('data-group');
+                const monthKey = row.getAttribute('data-month-key');
+                const dayKey = row.getAttribute('data-day-key');
+                const isToday = row.getAttribute('data-today') === '1';
+
+                if (group === 'month' && monthKey) {
+                    e.preventDefault();
+                    toggleMonth(monthKey);
+                } else if (group === 'day' && dayKey && !isToday) {
+                    e.preventDefault();
+                    toggleDay(dayKey);
+                }
+            });
+
+            function toggleMonth(monthKey) {
+                const monthRow = tbody.querySelector('tr.group-month-row[data-month-key="' + monthKey + '"]');
+                if (!monthRow) return;
+                const collapsed = monthRow.getAttribute('data-collapsed') === '1';
+                const toggle = monthRow.querySelector('.group-toggle');
+                const rowsToToggle = tbody.querySelectorAll('tr[data-month-key="' + monthKey + '"][data-today="0"]');
+                if (collapsed) {
+                    rowsToToggle.forEach(r => r.classList.remove('group-row-hidden'));
+                    monthRow.removeAttribute('data-collapsed');
+                    if (toggle) toggle.textContent = '▼';
+                } else {
+                    rowsToToggle.forEach(r => r.classList.add('group-row-hidden'));
+                    monthRow.setAttribute('data-collapsed', '1');
+                    if (toggle) toggle.textContent = '▶';
+                }
+            }
+
+            function toggleDay(dayKey) {
+                const dayRow = tbody.querySelector('tr.group-day-row[data-day-key="' + dayKey + '"][data-today="0"]');
+                if (!dayRow) return;
+                const collapsed = dayRow.getAttribute('data-collapsed') === '1';
+                const toggle = dayRow.querySelector('.group-toggle');
+                const fileRows = [];
+                let next = dayRow.nextElementSibling;
+                while (next && next.classList.contains('order-row') && next.getAttribute('data-day-key') === dayKey) {
+                    fileRows.push(next);
+                    next = next.nextElementSibling;
+                }
+                if (collapsed) {
+                    fileRows.forEach(r => r.classList.remove('group-row-hidden'));
+                    dayRow.removeAttribute('data-collapsed');
+                    if (toggle) toggle.textContent = '▼';
+                } else {
+                    fileRows.forEach(r => r.classList.add('group-row-hidden'));
+                    dayRow.setAttribute('data-collapsed', '1');
+                    if (toggle) toggle.textContent = '▶';
+                }
+            }
+        })();
+
+        // Переключение статуса (только для Елены)
+        function toggleStatus(id, currentStatus) {
+            fetch(`/titan/toggle-status/${id}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Не удалось изменить статус');
+                    }
+                })
+                .catch(err => alert('Ошибка: ' + err));
+        }
+
+        // Динамическое добавление позиций
+        let itemIndex = 1;
+
+        function addItem() {
+            const container = document.getElementById('items-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'item-row';
+            newRow.setAttribute('data-index', itemIndex);
+            newRow.innerHTML = `
+                <select name="items[${itemIndex}][system_name]" required>
+                    <option value="">-- Система --</option>
+                    <option value="ti-base bell(geo) implantium">ti-base bell(geo) implantium</option>
+                    <option value="ti-base bell(geo) miss sp">ti-base bell(geo) miss sp</option>
+                    <option value="ti-base bell(geo) neobiotech">ti-base bell(geo) neobiotech</option>
+                    <option value="ti-base bell(geo) osstem regular">ti-base bell(geo) osstem regular</option>
+                    <option value="ti-base bell(geo) osstem mini">ti-base bell(geo) osstem mini</option>
+                    <option value="ti-base bell(geo) astra 4.5-5.0">ti-base bell(geo) astra 4.5-5.0</option>
+                    <option value="ti-base bell(geo) astra 3.5-4.0">ti-base bell(geo) astra 3.5-4.0</option>
+                    <option value="ti-base bell(geo) nobel mu">ti-base bell(geo) nobel mu</option>
+                    <option value="ti-base bell(geo) osstem mu">ti-base bell(geo) osstem mu</option>
+                    <option value="ti-base bell(geo) implantium mu">ti-base bell(geo) implantium mu</option>
+                    <option value="ti-base bell(geo) megagen anyridge">ti-base bell(geo) megagen anyridge</option>
+                    <option value="ti-base bell(geo) nobel active rp">ti-base bell(geo) nobel active rp</option>
+                    <option value="ti-base bell(geo) nobel active np">ti-base bell(geo) nobel active np</option>
+                    <option value="ti-base bell(geo) osstem comocta 4.8">ti-base bell(geo) osstem comocta 4.8</option>
+                    <option value="ti-base bell(geo) osstem comocta 6.0">ti-base bell(geo) osstem comocta 6.0</option>
+                    <option value="ti-base flat ankylos">ti-base flat ankylos</option>
+                    <option value="ti-base flat medentika">ti-base flat medentika</option>
+                </select>
+                <input type="number" name="items[${itemIndex}][size]" placeholder="Размер" step="0.1" min="0" required>
+                <label>
+                    <input type="checkbox" name="items[${itemIndex}][has_hex]"> С позиционером
+                </label>
+                <button type="button" class="remove-item" onclick="removeItem(this)">✖</button>
+            `;
+            container.appendChild(newRow);
+            itemIndex++;
+        }
+
+        function removeItem(btn) {
+            const row = btn.closest('.item-row');
+            if (row) {
+                row.remove();
+            }
+        }
+
+        // Показываем кнопку удаления на всех кроме первой
+        document.querySelectorAll('.item-row').forEach((row, index) => {
+            const removeBtn = row.querySelector('.remove-item');
+            if (index > 0) {
+                removeBtn.style.display = 'inline-block';
+            }
+        });
+
+        // Динамические фильтры
+        (function() {
+            const filterForm = document.querySelector('.filter-form form');
+            if (!filterForm) return;
+
+            const inputs = filterForm.querySelectorAll('input, select');
+            let filterTimeout;
+
+            function applyFilters() {
+                const formData = new FormData(filterForm);
+                const params = new URLSearchParams(formData).toString();
+                window.location.href = '/titan?' + params;
+            }
+
+            inputs.forEach(input => {
+                input.addEventListener('input', function() {
+                    clearTimeout(filterTimeout);
+                    filterTimeout = setTimeout(applyFilters, 600);
+                });
+                if (input.tagName === 'SELECT') {
+                    input.addEventListener('change', function() {
+                        clearTimeout(filterTimeout);
+                        filterTimeout = setTimeout(applyFilters, 600);
+                    });
+                }
+            });
+        })();
+
+        // Печать за выбранный диапазон дат (только date_from/date_to)
+        document.getElementById('printDayBtn').addEventListener('click', function() {
+            const dateFrom = document.getElementById('date_from').value;
+            const dateTo = document.getElementById('date_to').value;
+            
+            if (!dateFrom && !dateTo) {
+                alert('Выберите хотя бы одну дату');
+                return;
+            }
+            
+            let url = '/titan/print?';
+            if (dateFrom) url += `date_from=${dateFrom}&`;
+            if (dateTo) url += `date_to=${dateTo}`;
+            url = url.replace(/[&]$/, '');
+            
+            window.open(url, '_blank');
+        });
+
+        // Печать с учётом всех текущих фильтров (order_number, status, date_from, date_to)
+        document.getElementById('printWithFiltersBtn').addEventListener('click', function() {
+            const form = document.getElementById('filterForm');
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData).toString();
+            window.open('/titan/print?' + params, '_blank');
+        });
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>

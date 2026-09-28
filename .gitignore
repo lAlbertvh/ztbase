@@ -1,0 +1,16 @@
+# Данные приложения (не попадают в git)
+database/
+uploads/
+
+# Зависимости и сборки
+node_modules/
+dist/
+prebuilds/
+
+# Логи и временные файлы
+*.log
+.DS_Store
+
+# Переменные окружения с секретами
+.env
+.env.local

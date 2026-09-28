@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4CAF50">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/icons/icon-192.png">
+    <title>Exocad Хранилище 3D-файлов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .downloaded-row {
+            background-color: #d4edda !important;
+        }
+        .filter-form, .upload-form {
+            background: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .filter-form label {
+            margin-right: 15px;
+        }
+        .filter-form input, .filter-form select {
+            padding: 5px;
+            margin-right: 10px;
+        }
+        .filter-form button, .upload-form button {
+            padding: 6px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .filter-form button:hover, .upload-form button:hover {
+            background-color: #45a049;
+        }
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .header-buttons {
+            display: inline-flex;
+            align-items: stretch;
+            gap: 10px;
+            margin-left: auto;
+        }
+        .logout,
+        .add-user-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 38px;
+            padding: 0 16px;
+            box-sizing: border-box;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        .logout {
+            color: #fff;
+            background-color: #f44336;
+        }
+        .logout:hover {
+            background-color: #d32f2f;
+        }
+        .add-user-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+        .add-user-btn:hover {
+            background-color: #1976D2;
+        }
+        .reset-link {
+            margin-left: 10px;
+        }
+        .image-preview {
+            max-width: 50px;
+            max-height: 50px;
+            cursor: pointer;
+        }
+        .actions-cell {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .btn-download,
+        .delete-btn {
+            display: inline-block;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s, filter 0.2s;
+        }
+        .btn-download {
+            background-color: #2196F3;
+            color: white;
+        }
+        .btn-download:hover {
+            background-color: #1976D2;
+        }
+        .btn-download.btn-download-img {
+            background-color: #607D8B;
+        }
+        .btn-download.btn-download-img:hover {
+            background-color: #455A64;
+        }
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+        /* Стили для drag-and-drop */
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background-color: #fafafa;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .drop-zone.dragover {
+            background-color: #e1f5fe;
+            border-color: #2196F3;
+        }
+        .drop-zone .file-name {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #333;
+            word-break: break-word;
+        }
+        .upload-form input[type="text"], .upload-form textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .status-checkbox {
+            margin-right: 15px;
+        }
+        .comment-cell {
+            max-width: 22em;
+        }
+        .comment-text {
+            display: inline-block;
+            max-width: 20ch;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            vertical-align: middle;
+        }
+        .btn-edit {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 4px 10px;
+            font-size: 12px;
+            line-height: 1.4;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            color: #333;
+            cursor: pointer;
+            vertical-align: middle;
+            text-decoration: none;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+        }
+        .btn-edit:hover {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+        .cell-center {
+            text-align: center;
+            vertical-align: middle;
+        }
+        .status-cb {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #4CAF50;
+            margin: 0;
+            vertical-align: middle;
+        }
+        /* Группировка по месяцу/дню */
+        .group-month-row td,
+        .group-day-row td {
+            border: 1px solid #c8e6c9;
+        }
+        .group-month-row {
+            background: #e8f5e9;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .group-month-row:hover {
+            background: #c8e6c9;
+        }
+        .group-day-row {
+            background: #f1f8e9;
+            cursor: pointer;
+            user-select: none;
+        }
+        .group-day-row:hover {
+            background: #dcedc8;
+        }
+        .group-day-row.day-today {
+            background: #fff9c4;
+        }
+        .group-toggle {
+            display: inline-block;
+            width: 18px;
+            text-align: center;
+            margin-right: 6px;
+        }
+        .group-row-hidden {
+            display: none;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .upload-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .upload-status.error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+        .upload-status.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+        /* ===== Адаптивность для телефонов ===== */
+        @media (max-width: 768px) {
+            body { margin: 10px; font-size: 14px; }
+            .page-header { flex-direction: column; align-items: flex-start; }
+            .header-buttons { width: 100%; justify-content: space-between; margin-top: 10px; }
+            .header-buttons a { flex: 1; text-align: center; padding: 10px 4px; font-size: 12px; }
+            .upload-form, .filter-form { padding: 12px; }
+            .drop-zone { padding: 14px; font-size: 13px; }
+            .filter-form label { display: block; margin-bottom: 8px; }
+            .filter-form input, .filter-form select { width: 100%; box-sizing: border-box; }
+            .actions-cell { flex-direction: column; align-items: stretch; }
+            .btn-download, .delete-btn { text-align: center; }
+            /* Таблица -> карточки */
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+            thead { display: none; }
+            tr { margin-bottom: 8px; }
+            .group-month-row, .group-day-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-weight: bold;
+            }
+            .file-row {
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 6px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            .downloaded-row { background-color: #d4edda !important; }
+            table td {
+                border: none;
+                border-bottom: 1px solid #eee;
+                padding: 6px 8px;
+                text-align: left;
+                position: relative;
+                padding-left: 110px;
+            }
+            table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 8px;
+                width: 95px;
+                font-weight: bold;
+                color: #666;
+            }
+            /* Убираем дублирование меток для ячеек без атрибута */
+            table td:not([data-label]) { padding-left: 8px; }
+            .comment-text { max-width: none; }
+            .status-cb { width: 24px; height: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="page-header">Хранилище 3D-файлов 
+        <span style="font-size: 0.7em;">(вы вошли как <strong><%= currentUser %></strong>)</span>
+        <span class="header-buttons">
+            <% if (currentUser !== 'Елена') { %>
+                <a href="/titan" class="add-user-btn" style="background-color: #FF9800;">🔩 Титановые основания</a>
+            <% } %>
+            <a href="/add-user" class="add-user-btn">➕ Добавить пользователя</a>
+            <a href="/logout" class="logout">Выйти</a>
+        </span>
+    </h1>
+
+    <!-- Форма загрузки (drag-and-drop) -->
+    <div class="upload-form">
+        <h2>Загрузить файлы</h2>
+        <div id="uploadForm">
+            <div class="drop-zone" id="dropZoneStl">
+                <input type="file" id="stlFileInput" style="display: none;" multiple>
+                <p>Перетащите 3D-файлы сюда или кликните для выбора (можно несколько)</p>
+                <div class="file-name" id="stlFileName"></div>
+            </div>
+            <div class="drop-zone" id="dropZoneImage">
+                <input type="file" id="imageFileInput" style="display: none;" accept="image/*">
+                <p>Перетащите фото сюда или кликните для выбора (необязательно)</p>
+                <div class="file-name" id="imageFileName"></div>
+            </div>
+            <div>
+                <label>Комментарий (общий для всех загружаемых файлов):</label>
+                <textarea id="commentText" rows="2"></textarea>
+            </div>
+            <button type="button" id="uploadBtn" class="btn">Загрузить</button>
+            <div id="uploadStatus" class="upload-status"></div>
+        </div>
+    </div>
+
+    <!-- Фильтры с динамическим поиском -->
+    <div class="filter-form">
+        <h2>Фильтры</h2>
+        <form method="get">
+            <label>
+                Дата загрузки:
+                <input type="date" name="date" value="<%= filters.date || '' %>">
+            </label>
+            <label>
+                Загрузил:
+                <select name="uploader">
+                    <option value="">Все</option>
+                    <% users.forEach(user => { %>
+                        <option value="<%= user %>" <%= filters.uploader === user ? 'selected' : '' %>><%= user %></option>
+                    <% }); %>
+                </select>
+            </label>
+            <label>
+                Статус скачивания:
+                <select name="downloaded">
+                    <option value="">Все</option>
+                    <option value="false" <%= filters.downloaded === 'false' ? 'selected' : '' %>>Не скачано</option>
+                    <option value="true" <%= filters.downloaded === 'true' ? 'selected' : '' %>>Скачано</option>
+                </select>
+            </label>
+            <label>
+                Название файла (часть):
+                <input type="text" name="filename" value="<%= filters.filename || '' %>" placeholder="Введите часть имени...">
+            </label>
+            <button type="submit">Применить</button>
+            <a href="/" class="reset-link">Сбросить</a>
+        </form>
+    </div>
+
+    <!-- Таблица файлов -->
+    <h2>Список файлов</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Изображение</th>
+                <th>Имя 3D-файла</th>
+                <th>Загрузил</th>
+                <th>Дата загрузки</th>
+                <th>Статус скачивания</th>
+                <th>Скачал</th>
+                <th>Дата скачивания</th>
+                <th>Выпилено</th>
+                <th>Запечено</th>
+                <th>Комментарий</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody id="filesTableBody">
+            <% if (files.length === 0) { %>
+                <tr><td colspan="11" style="text-align:center;">Нет файлов, соответствующих фильтру</td></tr>
+            <% } else { %>
+                <% groupedFiles.forEach(month => { %>
+                    <tr class="group-month-row" data-group="month" data-month-key="<%= month.monthKey %>" title="Нажмите, чтобы свернуть/развернуть месяц">
+                        <td colspan="11"><span class="group-toggle" data-month-key="<%= month.monthKey %>">▼</span><%= month.monthLabel %></td>
+                    </tr>
+                    <% month.daysList.forEach(day => { %>
+                        <tr class="group-day-row <%= day.isToday ? 'day-today' : '' %>" data-group="day" data-month-key="<%= month.monthKey %>" data-day-key="<%= day.dateKey %>" data-today="<%= day.isToday ? '1' : '0' %>" title="<%= day.isToday ? 'Сегодня (всегда развёрнуто)' : 'Нажмите, чтобы свернуть/развернуть день' %>">
+                            <td colspan="11"><span class="group-toggle" style="margin-left: 20px;" data-day-key="<%= day.dateKey %>" data-today="<%= day.isToday ? '1' : '0' %>">▼</span><%= day.dayLabel %><% if (day.isToday) { %> <em>(сегодня)</em><% } %></td>
+                        </tr>
+                        <% day.files.forEach(file => { %>
+                            <tr class="file-row <%= file.downloaded ? 'downloaded-row' : '' %>" data-group="file" data-month-key="<%= month.monthKey %>" data-day-key="<%= day.dateKey %>" data-today="<%= day.isToday ? '1' : '0' %>">
+                                <td data-label="Фото">
+                                    <% if (file.image_name) { %>
+                                        <a href="/image/<%= file.id %>" target="_blank">
+                                            <img src="/image/<%= file.id %>" alt="Image" class="image-preview" 
+                                                 onerror="this.style.display='none'">
+                                        </a>
+                                    <% } else { %>
+                                        <span>—</span>
+                                    <% } %>
+                                </td>
+                                <td data-label="Файл"><%= file.original_name %></td>
+                                <td data-label="Загрузил"><%= file.uploader %></td>
+                                <td data-label="Дата"><%= new Date(file.upload_date).toLocaleString() %></td>
+                                <td data-label="Статус"><%= file.downloaded ? 'Скачан' : 'Не скачан' %></td>
+                                <td data-label="Скачал"><%= file.downloaded_by || '-' %></td>
+                                <td data-label="Дата скачив."><%= file.downloaded_date ? new Date(file.downloaded_date).toLocaleString() : '-' %></td>
+                                <td class="cell-center" data-label="Выпилено">
+                                    <input type="checkbox" class="status-cb" id="milled-<%= file.id %>" <%= file.milled ? 'checked' : '' %>
+                                        onchange="toggleStatus(<%= file.id %>, 'milled', this)" title="Выпилено">
+                                </td>
+                                <td class="cell-center" data-label="Запечено">
+                                    <input type="checkbox" class="status-cb" id="baked-<%= file.id %>" <%= file.baked ? 'checked' : '' %>
+                                        onchange="toggleStatus(<%= file.id %>, 'baked', this)" title="Запечено">
+                                </td>
+                                <td class="comment-cell" data-label="Комментарий">
+                                    <span id="comment-<%= file.id %>" class="comment-text"><%= file.comment || '' %></span>
+                                    <button type="button" class="btn-edit" onclick="editComment(<%= file.id %>)" title="Изменить комментарий">Изменить</button>
+                                </td>
+                                <td class="actions-cell" data-label="Действия">
+                                    <a href="/download/<%= file.id %>" class="btn-download">Скачать 3D</a>
+                                    <% if (file.image_name) { %>
+                                        <a href="/download-image/<%= file.id %>" class="btn-download btn-download-img">Скачать изображение</a>
+                                    <% } %>
+                                    <button type="button" class="delete-btn" onclick="deleteFile(<%= file.id %>)">Удалить</button>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    <% }); %>
+                <% }); %>
+            <% } %>
+        </tbody>
+    </table>
+
+    <script>
+        // Сворачивание по месяцу и дню
+        (function() {
+            const tbody = document.getElementById('filesTableBody');
+            if (!tbody) return;
+            const todayKey = '<%= todayKey %>';
+
+            tbody.addEventListener('click', function(e) {
+                const row = e.target.closest('tr');
+                if (!row) return;
+                const group = row.getAttribute('data-group');
+                const monthKey = row.getAttribute('data-month-key');
+                const dayKey = row.getAttribute('data-day-key');
+                const isToday = row.getAttribute('data-today') === '1';
+
+                if (group === 'month' && monthKey) {
+                    e.preventDefault();
+                    toggleMonth(monthKey);
+                } else if (group === 'day' && dayKey && !isToday) {
+                    e.preventDefault();
+                    toggleDay(dayKey);
+                }
+            });
+
+            function toggleMonth(monthKey) {
+                const monthRow = tbody.querySelector('tr.group-month-row[data-month-key="' + monthKey + '"]');
+                if (!monthRow) return;
+                const collapsed = monthRow.getAttribute('data-collapsed') === '1';
+                const toggle = monthRow.querySelector('.group-toggle');
+                const rowsToToggle = tbody.querySelectorAll('tr[data-month-key="' + monthKey + '"][data-today="0"]');
+                if (collapsed) {
+                    rowsToToggle.forEach(r => r.classList.remove('group-row-hidden'));
+                    monthRow.removeAttribute('data-collapsed');
+                    if (toggle) toggle.textContent = '▼';
+                } else {
+                    rowsToToggle.forEach(r => r.classList.add('group-row-hidden'));
+                    monthRow.setAttribute('data-collapsed', '1');
+                    if (toggle) toggle.textContent = '▶';
+                }
+            }
+
+            function toggleDay(dayKey) {
+                const dayRow = tbody.querySelector('tr.group-day-row[data-day-key="' + dayKey + '"][data-today="0"]');
+                if (!dayRow) return;
+                const collapsed = dayRow.getAttribute('data-collapsed') === '1';
+                const toggle = dayRow.querySelector('.group-toggle');
+                const fileRows = [];
+                let next = dayRow.nextElementSibling;
+                while (next && next.classList.contains('file-row') && next.getAttribute('data-day-key') === dayKey) {
+                    fileRows.push(next);
+                    next = next.nextElementSibling;
+                }
+                if (collapsed) {
+                    fileRows.forEach(r => r.classList.remove('group-row-hidden'));
+                    dayRow.removeAttribute('data-collapsed');
+                    if (toggle) toggle.textContent = '▼';
+                } else {
+                    fileRows.forEach(r => r.classList.add('group-row-hidden'));
+                    dayRow.setAttribute('data-collapsed', '1');
+                    if (toggle) toggle.textContent = '▶';
+                }
+            }
+        })();
+
+        // Drag-and-drop логика
+        const stlDropZone = document.getElementById('dropZoneStl');
+        const imageDropZone = document.getElementById('dropZoneImage');
+        const stlInput = document.getElementById('stlFileInput');
+        const imageInput = document.getElementById('imageFileInput');
+        const stlFileName = document.getElementById('stlFileName');
+        const imageFileName = document.getElementById('imageFileName');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const commentText = document.getElementById('commentText');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        function setupDropZone(zone, input, fileNameDiv, isImage) {
+            zone.addEventListener('click', () => input.click());
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('dragover');
+            });
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('dragover');
+            });
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    if (isImage) {
+                        selectedImageFile = files[0];
+                        imageFileName.textContent = files[0].name;
+                    } else {
+                        selectedStlFiles = Array.from(files);
+                        stlFileName.textContent = selectedStlFiles.map(f => f.name).join(', ');
+                    }
+                }
+            });
+            input.addEventListener('change', () => {
+                if (input.files.length > 0) {
+                    if (isImage) {
+                        selectedImageFile = input.files[0];
+                        imageFileName.textContent = input.files[0].name;
+                    } else {
+                        selectedStlFiles = Array.from(input.files);
+                        stlFileName.textContent = selectedStlFiles.map(f => f.name).join(', ');
+                    }
+                } else {
+                    if (isImage) {
+                        selectedImageFile = null;
+                        imageFileName.textContent = '';
+                    } else {
+                        selectedStlFiles = [];
+                        stlFileName.textContent = '';
+                    }
+                }
+            });
+        }
+
+        let selectedStlFiles = [];
+        let selectedImageFile = null;
+
+        setupDropZone(stlDropZone, stlInput, stlFileName, false);
+        setupDropZone(imageDropZone, imageInput, imageFileName, true);
+
+        uploadBtn.addEventListener('click', () => {
+            if (selectedStlFiles.length === 0) {
+                uploadStatus.textContent = 'Ошибка: выберите хотя бы один 3D-файл.';
+                uploadStatus.className = 'upload-status error';
+                return;
+            }
+            const formData = new FormData();
+            selectedStlFiles.forEach(file => {
+                formData.append('stlFiles', file);
+            });
+            if (selectedImageFile) {
+                formData.append('imageFile', selectedImageFile);
+            }
+            formData.append('milled', 'off');
+            formData.append('baked', 'off');
+            formData.append('comment', commentText.value);
+
+            uploadStatus.textContent = 'Загрузка...';
+            uploadStatus.className = 'upload-status';
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    return response.text().then(text => { throw new Error(text); });
+                }
+            })
+            .catch(err => {
+                uploadStatus.textContent = 'Ошибка: ' + err.message;
+                uploadStatus.className = 'upload-status error';
+            });
+        });
+
+        function toggleStatus(id, type, checkboxEl) {
+            const wasChecked = checkboxEl.checked;
+            fetch(`/toggle-${type}/${id}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) {
+                        checkboxEl.checked = !wasChecked;
+                        alert('Не удалось обновить статус');
+                    }
+                })
+                .catch(err => {
+                    checkboxEl.checked = !wasChecked;
+                    alert('Ошибка: ' + err);
+                });
+        }
+
+        function editComment(id) {
+            const currentSpan = document.getElementById(`comment-${id}`);
+            const currentText = currentSpan.textContent;
+            const newText = prompt('Введите новый комментарий:', currentText);
+            if (newText !== null) {
+                fetch(`/comment/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ comment: newText })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        currentSpan.textContent = newText;
+                    }
+                })
+                .catch(err => alert('Ошибка: ' + err));
+            }
+        }
+
+        function deleteFile(id) {
+            const code = prompt('Введите код подтверждения (78):');
+            if (code === null) return;
+            fetch(`/delete/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `code=${encodeURIComponent(code)}`
+            })
+            .then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    response.text().then(text => alert('Ошибка: ' + text));
+                }
+            })
+            .catch(err => alert('Ошибка сети: ' + err));
+        }
+
+        // Динамический поиск с задержкой (debounce) для главной страницы
+        (function() {
+            const searchInput = document.querySelector('input[name="filename"]');
+            if (!searchInput) return;
+
+            let searchTimeout;
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    const form = document.querySelector('.filter-form form');
+                    if (form) {
+                        const formData = new FormData(form);
+                        const params = new URLSearchParams(formData).toString();
+                        window.location.href = '/?' + params;
+                    }
+                }, 600);
+            });
+        })();
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4CAF50">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/icons/icon-192.png">
+    <title>Вход в систему</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f5f5f5; padding: 16px; }
+        .container { max-width: 400px; width: 100%; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h1 { text-align: center; font-size: 22px; color: #333; }
+        select, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border-radius: 6px; }
+        select { border: 1px solid #ccc; }
+        button { background: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background: #45a049; }
+        button:focus, select:focus { outline: 2px solid #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Выбор пользователя</h1>
+        <form method="post" action="/set-user">
+            <select name="username" required>
+                <option value="">-- Выберите имя --</option>
+                <% users.forEach(user => { %>
+                    <option value="<%= user %>"><%= user %></option>
+                <% }); %>
+            </select>
+            <button type="submit">Войти</button>
+        </form>
+    </div>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>
