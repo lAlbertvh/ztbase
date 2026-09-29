@@ -19,11 +19,16 @@ const str = (v) => (v === undefined || v === null ? '' : (Array.isArray(v) ? v[0
 
 // Зубы приходят как "18", "18,17", "18 17 16". Собираем в массив чисел,
 // отбрасывая мусор: иначе один символ в поле ломает весь наряд.
+// Допустимые номера зубов постоянного прикуса: 11-18, 21-28, 31-38,
+// 41-48. Простая проверка «от 11 до 48» не годится — она пропустила бы
+// 19, 20, 29, 30, 39 и 40, которых в формуле нет.
+const PERMANENT_TEETH = new Set(R.QUADRANTS.flatMap(q => q.teeth));
+
 function parseTeeth(value) {
   const out = [];
   for (const part of String(value || '').split(/[\s,;]+/)) {
     const n = parseInt(part, 10);
-    if (Number.isInteger(n) && n >= 11 && n <= 48) out.push(n);
+    if (Number.isInteger(n) && PERMANENT_TEETH.has(n)) out.push(n);
   }
   return [...new Set(out)].sort((a, b) => a - b);
 }
@@ -155,6 +160,12 @@ function listOrders(db, labId, filters = {}) {
     where.push('date(created_at) <= date(?)');
     params.push(filters.date_to);
   }
+  // Фильтр по владельцу обязателен до LIMIT: если отсечь стоматолога
+  // уже после выборки, он получит чужие наряды вместо своих.
+  if (filters.owner) {
+    where.push('created_by = ?');
+    params.push(filters.owner);
+  }
 
   const limit = Math.min(Math.max(parseInt(filters.limit, 10) || 200, 1), 500);
   const offset = Math.max(parseInt(filters.offset, 10) || 0, 0);
@@ -162,6 +173,8 @@ function listOrders(db, labId, filters = {}) {
   const rows = db.prepare(`
     SELECT o.*,
            (SELECT COUNT(*) FROM order_teeth t WHERE t.order_id = o.id AND t.lab_id = o.lab_id) AS teeth_count,
+           (SELECT GROUP_CONCAT(t2.tooth, ' ') FROM order_teeth t2
+             WHERE t2.order_id = o.id AND t2.lab_id = o.lab_id ORDER BY t2.tooth) AS teeth_list,
            (SELECT GROUP_CONCAT(DISTINCT kind) FROM order_teeth t WHERE t.order_id = o.id AND t.lab_id = o.lab_id) AS kinds
     FROM orders o
     WHERE ${where.join(' AND ')}
@@ -184,6 +197,15 @@ function saveOrder(db, labId, data, user) {
 
     let orderId = data.id ? Number(data.id) : null;
     if (orderId) {
+      // Проверяем занятость номера до UPDATE и исключаем сам наряд:
+      // без этой проверки занятый номер ронял бы запрос ошибкой
+      // уникального индекса SQLite, и сотрудник видел бы 500 вместо
+      // понятного сообщения о дубликате.
+      const dupEdit = db.prepare(
+        'SELECT id FROM orders WHERE lab_id = ? AND order_number = ? AND id <> ?'
+      ).get(labId, data.order_number, orderId);
+      if (dupEdit) return { id: null, error: 'Наряд с таким номером уже есть' };
+
       // UPDATE с lab_id в условии: наряд чужой лаборатории нельзя
       // изменить, даже если знать его id.
       const res = db.prepare(`
@@ -191,12 +213,13 @@ function saveOrder(db, labId, data, user) {
           order_number = ?, customer = ?, phone = ?, email = ?,
           patient = ?, delivery_address = ?, stage = ?, priority = ?,
           comment = ?, dentist_note = ?, taken_at = ?, promised_at = ?,
-          updated_at = ?
+          incoming = ?, delivery = ?, updated_at = ?
         WHERE id = ? AND lab_id = ?
       `).run(
         data.order_number, data.customer, data.phone, data.email,
         data.patient, data.delivery_address, data.stage, data.priority,
         data.comment, data.dentist_note, data.taken_at, data.promised_at,
+        (data.incoming || []).join(','), (data.delivery || []).join(','),
         now, orderId, labId,
       );
       if (res.changes === 0) return { id: null, error: 'Наряд не найден' };
@@ -207,12 +230,14 @@ function saveOrder(db, labId, data, user) {
       const info = db.prepare(`
         INSERT INTO orders
           (lab_id, order_number, customer, phone, email, patient, delivery_address,
-           stage, priority, comment, dentist_note, taken_at, promised_at, created_by, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           stage, priority, comment, dentist_note, taken_at, promised_at, incoming, delivery,
+           created_by, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       `).run(
         labId, data.order_number, data.customer, data.phone, data.email,
         data.patient, data.delivery_address, data.stage, data.priority,
         data.comment, data.dentist_note, data.taken_at, data.promised_at,
+        (data.incoming || []).join(','), (data.delivery || []).join(','),
         user || null, now, now,
       );
       orderId = info.lastInsertRowid;

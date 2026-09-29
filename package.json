@@ -5,7 +5,7 @@
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node test/orders-live.js",
     "start": "node server.js",
     "build:linux": "pkg server.js --targets node22-linux-x64 --output dist/exo-linux",
     "build:win": "pkg server.js --targets node22-win-x64 --output dist/exo-win.exe",

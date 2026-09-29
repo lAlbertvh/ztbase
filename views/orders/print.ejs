@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Наряд <%= order.order_number %></title>
+    <style>
+        /* Печатный бланк. Размеры в мм, шрифт 11pt — такой бланк
+           читается и на производстве, и в архиве лаборатории. */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 8mm; color: #000; font-size: 11pt; }
+        h1 { text-align: center; font-size: 15pt; margin: 0 0 2mm; }
+        .sub { text-align: center; font-size: 10pt; margin-bottom: 4mm; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 3mm; }
+        th, td { border: 1px solid #000; padding: 1.6mm 2mm; vertical-align: top; }
+        th { background: #e8e8e8; font-size: 9.5pt; text-align: left; }
+        .kv td { width: 25%; }
+        .kv td.k { background: #f4f4f4; width: 22%; }
+        .teeth td { text-align: center; font-size: 11pt; padding: 1.2mm 1mm; }
+        .teeth td.on { background: #111; color: #fff; font-weight: bold; }
+        .flags span { display: inline-block; border: 1px solid #000; padding: 0.4mm 1.4mm;
+                      margin: 0.4mm 1mm 0.4mm 0; font-size: 9pt; }
+        .sign { display: flex; gap: 6mm; margin-top: 8mm; font-size: 10pt; }
+        .sign div { flex: 1; border-top: 1px solid #000; padding-top: 1.5mm; }
+        .no-print { margin-bottom: 4mm; }
+        .no-print button { padding: 6px 14px; font-size: 13px; cursor: pointer;
+                           border: 1px solid #888; background: #f4f4f4; border-radius: 4px; }
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; }
+            @page { size: A4; margin: 10mm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button onclick="window.print()">Печать</button>
+        <button onclick="history.back()">Назад</button>
+    </div>
+
+    <h1>ЗАКАЗ-НАРЯД № <%= order.order_number %></h1>
+    <div class="sub">ZT Lab · сформирован <%= new Date().toLocaleString('ru-RU') %></div>
+
+    <table class="kv">
+        <tr>
+            <td class="k">Лаборатория / клиника</td><td><%= order.customer || '' %></td>
+            <td class="k">Телефон</td><td><%= order.phone || '' %></td>
+        </tr>
+        <tr>
+            <td class="k">Пациент / внутр. номер</td><td><%= order.patient || '' %></td>
+            <td class="k">E-mail</td><td><%= order.email || '' %></td>
+        </tr>
+        <tr>
+            <td class="k">Адрес доставки</td><td colspan="3"><%= order.delivery_address || '' %></td>
+        </tr>
+        <tr>
+            <td class="k">Дата приёма</td><td><%= (order.created_at || '').slice(0, 10) %></td>
+            <td class="k">Взято в работу</td><td><%= order.taken_at ? order.taken_at.slice(0, 16) : '' %></td>
+        </tr>
+        <tr>
+            <td class="k">Обещано</td><td><%= order.promised_at || '' %></td>
+            <td class="k">Срочность</td><td><%= order.priority ? 'СРОЧНЫЙ' : 'обычный' %></td>
+        </tr>
+    </table>
+
+    <div class="sub" style="text-align:left;font-weight:bold;margin-bottom:1.5mm">Зубная формула</div>
+    <table class="teeth">
+        <% const teethAll = [];
+           catalog.QUADRANTS.forEach(q => q.teeth.forEach(t => teethAll.push(t)));
+           const marked = new Set(order.teeth.map(t => t.tooth)); %>
+        <tr>
+            <% catalog.QUADRANTS.forEach((q, qi) => { %>
+                <% q.teeth.forEach(t => { %>
+                    <td class="<%= marked.has(t) ? 'on' : '' %>"><%= t %></td>
+                <% }); %>
+                <% if (qi === 1) { %></tr><tr><% } %>
+            <% }); %>
+        </tr>
+        <tr>
+            <% catalog.QUADRANTS.forEach(q => { q.teeth.forEach(() => { %><td>&nbsp;</td><% }); %><td>&nbsp;</td><% }); %>
+        </tr>
+    </table>
+
+    <% const t0 = order.teeth[0]; %>
+    <% if (t0) { %>
+    <table class="kv">
+        <tr>
+            <td class="k">Вид работ</td><td colspan="3"><%= catalog.WORK_TITLE[t0.kind] || t0.kind %></td>
+        </tr>
+        <tr>
+            <td class="k">Материал</td><td><%= t0.material || '' %></td>
+            <td class="k">Цвет</td><td><%= t0.color || '' %></td>
+        </tr>
+    </table>
+    <% } %>
+
+    <% if (order.incoming) { %>
+    <div style="margin-bottom:3mm">
+        <strong>Поступило:</strong>
+        <div class="flags">
+            <% order.incoming.split(',').filter(Boolean).forEach(k => { %>
+                <span><%= catalog.INCOMING_TITLE[k] || k %></span>
+            <% }); %>
+        </div>
+    </div>
+    <% } %>
+
+    <% if (order.delivery) { %>
+    <div style="margin-bottom:3mm">
+        <strong>Требуется изготовить:</strong>
+        <div class="flags">
+            <% order.delivery.split(',').filter(Boolean).forEach(k => { %>
+                <span><%= catalog.DELIVERY_TITLE[k] || k %></span>
+            <% }); %>
+        </div>
+    </div>
+    <% } %>
+
+    <% if (t0 && (t0.abutment || t0.flags)) { %>
+    <div style="margin-bottom:3mm">
+        <strong>Отметки:</strong>
+        <div class="flags">
+            <% (t0.abutment || '').split(',').filter(Boolean).forEach(k => { %><span><%= catalog.ABUTMENT_TITLE[k] || k %></span><% }); %>
+            <% (t0.flags || '').split(',').filter(Boolean).forEach(k => { %><span><%= catalog.FRAME_FLAG_TITLE[k] || k %></span><% }); %>
+        </div>
+    </div>
+    <% } %>
+
+    <% if (t0 && t0.note) { %>
+    <table class="kv"><tr><td class="k">К зубам</td><td colspan="3"><%= t0.note %></td></tr></table>
+    <% } %>
+
+    <% if (order.materials.length) { %>
+    <div class="sub" style="text-align:left;font-weight:bold;margin-bottom:1.5mm">Материалы</div>
+    <table>
+        <tr><th style="width:44%">Название</th><th style="width:14%">Кол-во</th><th style="width:14%">Ед.</th><th>Примечание</th></tr>
+        <% order.materials.forEach(m => { %>
+        <tr><td><%= m.name %></td><td><%= m.qty %></td><td><%= m.unit %></td><td><%= m.note || '' %></td></tr>
+        <% }); %>
+    </table>
+    <% } %>
+
+    <% if (order.comment) { %>
+    <table class="kv"><tr><td class="k">Комментарий</td><td colspan="3"><%= order.comment %></td></tr></table>
+    <% } %>
+
+    <div class="sub" style="text-align:left;font-weight:bold;margin-bottom:1.5mm">Журнал этапов</div>
+    <table>
+        <tr><th style="width:20%">Дата и время</th><th style="width:24%">Этап</th><th style="width:18%">Сотрудник</th><th>Заметка</th></tr>
+        <% order.stages.slice().reverse().forEach(s => { %>
+        <tr>
+            <td><%= (s.created_at || '').slice(0, 16) %></td>
+            <td><%= catalog.STAGE_TITLE[s.stage] || s.stage %></td>
+            <td><%= s.user || '' %></td>
+            <td><%= s.note || '' %></td>
+        </tr>
+        <% }); %>
+    </table>
+
+    <div class="sign">
+        <div>Принял</div>
+        <div>Выполнил</div>
+        <div>Проверил администратор</div>
+    </div>
+</body>
+</html>

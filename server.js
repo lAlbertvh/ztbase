@@ -8,6 +8,8 @@ const fs = require('fs');
 const ExcelJS = require('exceljs');
 const { storage, uniqueName, BACKEND } = require('./src/services/storage');
 const SqliteStore = require('./src/services/session-store');
+const { migrateOrders } = require('./src/db/orders-schema');
+const createOrderRoutes = require('./src/routes/orders');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -190,6 +192,12 @@ function initDb() {
     db.exec('PRAGMA foreign_keys = ON');
     console.log('users: уникальность имени ограничена лабораторией (lab_id, name)');
   }
+
+  // Схема заказ-наряда вынесена в отдельный модуль: она состоит из
+  // пяти связанных таблиц и не должна занимать точку входа.
+  // Миграции идемпотентны, поэтому вызов безопасен при каждом старте.
+  migrateOrders(db);
+  console.log('Схема заказ-нарядов готова');
 
   const userCount = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (userCount === 0) {
@@ -432,6 +440,11 @@ function requireAdmin(req, res, next) {
   }
   next();
 }
+
+// ------ Заказ-наряды ------
+// Маршруты подключаются здесь, после requireAdmin: наряды нуждаются
+// в этой проверке прав и в переменной db.
+app.use('/orders', createOrderRoutes({ db, requireAdmin }));
 
 // ------ Маршруты ------
 

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FF9800">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/icons/icon-192.png">
+    <title>Наряд <%= order.order_number %></title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+               margin: 0; background: #f4f5f7; color: #23272f; }
+        header { background: #FF9800; color: #fff; padding: 12px 16px;
+                 display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+                 position: sticky; top: 0; z-index: 10; }
+        header h1 { font-size: 19px; margin: 0; }
+        header .who { font-size: 13px; opacity: .9; margin-left: auto; }
+        main { max-width: 1000px; margin: 0 auto; padding: 16px 16px 60px; }
+        .card { background: #fff; border: 1px solid #e2e4e9; border-radius: 8px;
+                margin-bottom: 14px; overflow: hidden; }
+        .card h2 { font-size: 15px; margin: 0; padding: 10px 14px;
+                   background: #eef1f5; color: #374151; border-bottom: 1px solid #e2e4e9; }
+        .body { padding: 14px; }
+        .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 16px; }
+        .kv > div { font-size: 14px; }
+        .kv .k { font-size: 12px; color: #6b7280; }
+        .kv .v { font-weight: 500; word-break: break-word; }
+        .teeth { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tooth { background: #e0e7ff; color: #3730a3; border-radius: 6px;
+                 padding: 5px 10px; font-size: 15px; font-weight: 600; }
+        .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tag { background: #f1f5f9; color: #475569; border-radius: 10px; padding: 3px 9px; font-size: 13px; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+        .s-new{background:#e2e8f0;color:#475569} .s-taken{background:#fef3c7;color:#92400e}
+        .s-review{background:#e0e7ff;color:#3730a3} .s-milled{background:#dbeafe;color:#1e40af}
+        .s-baked{background:#cffafe;color:#0e7490} .s-finished{background:#dcfce7;color:#166534}
+        .s-issued{background:#d1fae5;color:#065f46} .s-cancelled{background:#fee2e2;color:#991b1b}
+        .timeline { list-style: none; margin: 0; padding: 0; }
+        .timeline li { padding: 8px 0 8px 16px; border-left: 2px solid #e2e4e9; position: relative; font-size: 14px; }
+        .timeline li::before { content: ''; position: absolute; left: -6px; top: 14px;
+                               width: 10px; height: 10px; border-radius: 50%; background: #cbd2dc; }
+        .timeline li.now::before { background: #FF9800; }
+        .timeline .when { color: #8a93a0; font-size: 12px; }
+        .timeline .note { color: #4b5563; margin-top: 2px; }
+        .btn { display: inline-block; padding: 9px 16px; border-radius: 6px; border: 1px solid transparent;
+               font-size: 14px; cursor: pointer; text-decoration: none; background: #fff; color: #23272f; }
+        .btn-primary { background: #2b6cb0; color: #fff; }
+        .btn-danger { background: #c53030; color: #fff; }
+        select, input[type=text] { padding: 8px 10px; border: 1px solid #cbd2dc;
+                                   border-radius: 6px; font-size: 15px; font-family: inherit; }
+        .inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+        .inline > div { flex: 1 1 130px; }
+        label { display: block; font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #eef0f3; }
+        th { font-size: 12px; color: #6b7280; font-weight: 600; }
+        .muted { color: #8a93a0; font-size: 12px; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/orders" class="btn" style="color:#23272f">&larr; Наряды</a>
+        <h1>Наряд <%= order.order_number %></h1>
+        <span class="badge s-<%= order.stage %>"><%= catalog.STAGE_TITLE[order.stage] || order.stage %></span>
+        <% if (order.priority) { %><span class="badge s-cancelled">Срочный</span><% } %>
+        <span class="who"><%= currentUser %></span>
+    </header>
+
+    <main>
+        <div class="card">
+            <h2>Заказчик</h2>
+            <div class="body">
+                <div class="kv">
+                    <div><div class="k">Лаборатория / клиника</div><div class="v"><%= order.customer || '—' %></div></div>
+                    <div><div class="k">Телефон</div><div class="v"><%= order.phone || '—' %></div></div>
+                    <div><div class="k">E-mail</div><div class="v"><%= order.email || '—' %></div></div>
+                    <div><div class="k">Пациент / внутренний номер</div><div class="v"><%= order.patient || '—' %></div></div>
+                    <div><div class="k">Адрес доставки</div><div class="v"><%= order.delivery_address || '—' %></div></div>
+                    <div><div class="k">Создан</div><div class="v"><%= (order.created_at || '').slice(0, 16) %></div></div>
+                    <div><div class="k">Взято в работу</div><div class="v"><%= order.taken_at ? order.taken_at.slice(0, 16) : '—' %></div></div>
+                    <div><div class="k">Обещано</div><div class="v"><%= order.promised_at || '—' %></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Зубная формула и работы</h2>
+            <div class="body">
+                <div class="teeth">
+                    <% order.teeth.forEach(t => { %>
+                        <span class="tooth"><%= t.tooth %></span>
+                    <% }); %>
+                </div>
+                <% const t0 = order.teeth[0]; %>
+                <% if (t0) { %>
+                <div class="kv" style="margin-top:14px">
+                    <div><div class="k">Вид работ</div><div class="v"><%= catalog.WORK_TITLE[t0.kind] || t0.kind %></div></div>
+                    <div><div class="k">Материал</div><div class="v"><%= t0.material || '—' %></div></div>
+                    <div><div class="k">Цвет</div><div class="v"><%= t0.color || '—' %></div></div>
+                </div>
+                <% if (t0.abutment) { %>
+                <div class="tags" style="margin-top:10px">
+                    <% t0.abutment.split(',').filter(Boolean).forEach(k => { %>
+                        <span class="tag"><%= catalog.ABUTMENT_TITLE[k] || k %></span>
+                    <% }); %>
+                </div>
+                <% } %>
+                <% if (t0.flags) { %>
+                <div class="tags" style="margin-top:6px">
+                    <% t0.flags.split(',').filter(Boolean).forEach(k => { %>
+                        <span class="tag"><%= catalog.FRAME_FLAG_TITLE[k] || k %></span>
+                    <% }); %>
+                </div>
+                <% } %>
+                <% if (t0.note) { %>
+                    <p style="font-size:14px;margin:10px 0 0"><strong>К зубам:</strong> <%= t0.note %></p>
+                <% } %>
+                <% } %>
+            </div>
+        </div>
+
+        <% if (order.incoming || order.delivery) { %>
+        <div class="card">
+            <h2>Поступило и требуется</h2>
+            <div class="body">
+                <% if (order.incoming) { %>
+                <div style="margin-bottom:10px">
+                    <div class="muted" style="margin-bottom:4px">Поступило с заказом</div>
+                    <div class="tags">
+                        <% order.incoming.split(',').filter(Boolean).forEach(k => { %>
+                            <span class="tag"><%= catalog.INCOMING_TITLE[k] || k %></span>
+                        <% }); %>
+                    </div>
+                </div>
+                <% } %>
+                <% if (order.delivery) { %>
+                <div>
+                    <div class="muted" style="margin-bottom:4px">Требуется изготовить</div>
+                    <div class="tags">
+                        <% order.delivery.split(',').filter(Boolean).forEach(k => { %>
+                            <span class="tag"><%= catalog.DELIVERY_TITLE[k] || k %></span>
+                        <% }); %>
+                    </div>
+                </div>
+                <% } %>
+            </div>
+        </div>
+        <% } %>
+
+        <% if (order.comment || order.dentist_note) { %>
+        <div class="card">
+            <h2>Комментарии</h2>
+            <div class="body">
+                <% if (order.comment) { %>
+                    <p style="margin:0 0 10px;font-size:14px"><strong>Клиника:</strong> <%= order.comment %></p>
+                <% } %>
+                <% if (order.dentist_note) { %>
+                    <p style="margin:0;font-size:14px"><strong>Стоматолог:</strong> <%= order.dentist_note %></p>
+                <% } %>
+            </div>
+        </div>
+        <% } %>
+
+        <div class="card">
+            <h2>Материалы</h2>
+            <div class="body">
+                <% if (!order.materials.length) { %>
+                    <p class="muted">Материалы не указаны</p>
+                <% } else { %>
+                <table>
+                    <thead><tr><th>Название</th><th>Кол-во</th><th>Ед.</th><th>Примечание</th><% if (!isDentist) { %><th></th><% } %></tr></thead>
+                    <tbody>
+                    <% order.materials.forEach(m => { %>
+                    <tr>
+                        <td><%= m.name %></td>
+                        <td><%= m.qty %></td>
+                        <td><%= m.unit %></td>
+                        <td class="muted"><%= m.note || '' %></td>
+                        <% if (!isDentist) { %>
+                        <td style="white-space:nowrap">
+                            <form method="post" action="/orders/<%= order.id %>/material/<%= m.id %>/delete" onsubmit="return confirm('Убрать материал из наряда?')">
+                                <button class="btn" type="submit">✕</button>
+                            </form>
+                        </td>
+                        <% } %>
+                    </tr>
+                    <% }); %>
+                    </tbody>
+                </table>
+                <% } %>
+
+                <% if (!isDentist) { %>
+                <form method="post" action="/orders/<%= order.id %>/material" class="inline" style="margin-top:12px">
+                    <div><label>Материал</label><input type="text" name="name" required maxlength="120" placeholder="Можно вписать свой"></div>
+                    <div style="flex:0 0 90px"><label>Кол-во</label><input type="text" name="qty" value="1"></div>
+                    <div style="flex:0 0 80px"><label>Ед.</label><input type="text" name="unit" value="шт"></div>
+                    <div style="flex:2 1 200px"><label>Примечание</label><input type="text" name="note" maxlength="300"></div>
+                    <button class="btn btn-primary" type="submit">Добавить</button>
+                </form>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Этапы работы</h2>
+            <div class="body">
+                <% if (!order.stages.length) { %>
+                    <p class="muted">Журнал пуст</p>
+                <% } else { %>
+                <ul class="timeline">
+                    <% order.stages.forEach((s, i) => { %>
+                    <li class="<%= i === 0 ? 'now' : '' %>">
+                        <strong><%= catalog.STAGE_TITLE[s.stage] || s.stage %></strong>
+                        <% if (s.user) { %> — <%= s.user %><% } %>
+                        <div class="when"><%= (s.created_at || '').slice(0, 16) %></div>
+                        <% if (s.note) { %><div class="note"><%= s.note %></div><% } %>
+                    </li>
+                    <% }); %>
+                </ul>
+                <% } %>
+
+                <% if (!isDentist) { %>
+                <form method="post" action="/orders/<%= order.id %>/stage" class="inline" style="margin-top:14px">
+                    <div><label>Перевести на этап</label>
+                        <select name="stage">
+                            <% catalog.STAGES.forEach(s => { %>
+                                <option value="<%= s.key %>" <%= order.stage === s.key ? 'selected' : '' %>><%= s.title %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <div style="flex:2 1 220px"><label>Заметка к этапу</label><input type="text" name="note" maxlength="2000" placeholder="Что сделано или что нужно"></div>
+                    <button class="btn btn-primary" type="submit">Записать</button>
+                </form>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="actions">
+            <a class="btn btn-primary" href="/orders/<%= order.id %>/print">Печать наряда</a>
+            <% if (!isDentist) { %>
+                <a class="btn" href="/orders/<%= order.id %>/edit">Редактировать</a>
+                <a class="btn" href="/orders/<%= order.id %>/edit#teeth">Зубная формула</a>
+            <% } %>
+        </div>
+    </main>
+</body>
+</html>

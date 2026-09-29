@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FF9800">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/icons/icon-192.png">
+    <title><%= order ? 'Наряд ' + order.order_number : 'Новый наряд' %></title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+               margin: 0; background: #f4f5f7; color: #23272f; }
+        header { background: #FF9800; color: #fff; padding: 12px 16px;
+                 display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+                 position: sticky; top: 0; z-index: 10; }
+        header h1 { font-size: 19px; margin: 0; }
+        header .who { font-size: 13px; opacity: .9; margin-left: auto; }
+        main { max-width: 1000px; margin: 0 auto; padding: 16px 16px 60px; }
+        fieldset { background: #fff; border: 1px solid #e2e4e9; border-radius: 8px;
+                   margin: 0 0 14px; padding: 14px; }
+        legend { font-weight: 600; font-size: 15px; padding: 0 6px; color: #374151; }
+        label { display: block; font-size: 13px; color: #4b5563; margin-bottom: 4px; }
+        input[type=text], input[type=tel], input[type=email], input[type=date],
+        input[type=number], input[type=datetime-local], select, textarea {
+            width: 100%; padding: 8px 10px; border: 1px solid #cbd2dc;
+            border-radius: 6px; font-size: 15px; font-family: inherit; background: #fff; }
+        textarea { min-height: 74px; resize: vertical; }
+        .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+        .row { margin-bottom: 12px; }
+        .checks { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+        .checks label { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 14px; color: #23272f; }
+        .btn { display: inline-block; padding: 9px 16px; border-radius: 6px; border: 1px solid transparent;
+               font-size: 14px; cursor: pointer; text-decoration: none; background: #fff; color: #23272f; }
+        .btn-primary { background: #2b6cb0; color: #fff; }
+        .hint { font-size: 12px; color: #8a93a0; margin-top: 4px; }
+        .teeth-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+        .teeth-box { border: 1px solid #e2e4e9; border-radius: 6px; padding: 8px 10px; }
+        .teeth-box .t { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+        .teeth-box code { font-size: 15px; letter-spacing: 1px; color: #2b6cb0; }
+        .sticky-save { position: fixed; left: 0; right: 0; bottom: 0; background: #fff;
+                       border-top: 1px solid #dfe3e9; padding: 10px 16px; display: flex;
+                       gap: 10px; justify-content: flex-end; z-index: 9; }
+        .mat-row { display: grid; gap: 8px; grid-template-columns: 2fr .6fr .7fr 2fr auto;
+                   margin-bottom: 6px; align-items: center; }
+        @media (max-width: 640px) { .mat-row { grid-template-columns: 1fr 1fr; } }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/orders" class="btn" style="color:#23272f">&larr; Наряды</a>
+        <h1><%= order ? 'Наряд ' + order.order_number : 'Новый заказ-наряд' %></h1>
+        <span class="who"><%= currentUser %></span>
+    </header>
+
+    <form method="post" action="/orders">
+        <% if (order) { %><input type="hidden" name="id" value="<%= order.id %>"><% } %>
+        <% if (isDentist) { %><input type="hidden" name="stage" value="new"><% } %>
+
+        <main>
+            <fieldset>
+                <legend>Заказчик</legend>
+                <div class="grid">
+                    <div>
+                        <label>Номер наряда <span style="color:#c53030">*</span></label>
+                        <input type="text" name="order_number" required maxlength="60"
+                               value="<%= order ? order.order_number : '' %>">
+                    </div>
+                    <div>
+                        <label>Лаборатория / клиника</label>
+                        <input type="text" name="customer" maxlength="200"
+                               value="<%= order ? order.customer || '' : '' %>">
+                    </div>
+                    <div>
+                        <label>Телефон</label>
+                        <input type="tel" name="phone" maxlength="60"
+                               value="<%= order ? order.phone || '' : '' %>">
+                    </div>
+                    <div>
+                        <label>E-mail</label>
+                        <input type="email" name="email" maxlength="120"
+                               value="<%= order ? order.email || '' : '' %>">
+                    </div>
+                    <div>
+                        <label>Пациент / внутренний номер</label>
+                        <input type="text" name="patient" maxlength="200"
+                               value="<%= order ? order.patient || '' : '' %>">
+                    </div>
+                    <div>
+                        <label>Адрес доставки</label>
+                        <input type="text" name="delivery_address" maxlength="300"
+                               value="<%= order ? order.delivery_address || '' : '' %>">
+                    </div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Зубная формула <span style="color:#c53030">*</span></legend>
+                <label>Номера зубов через пробел или запятую, например: 16 15 14 21 22</label>
+                <input type="text" name="teeth" required
+                       value="<%= teethText %>" placeholder="18,17,16 15 14 13 12 11" autocomplete="off">
+                <div class="hint">Зубы 1–8: 11–18, 21–28, 31–38, 41–48. Постоянные: 18 17 16 15 14 13 12 11 21 22 23 24 25 26 27 28 38 37 36 35 34 33 32 31 41 42 43 44 45 46 47 48</div>
+
+                <div class="teeth-grid" style="margin-top:10px">
+                    <% catalog.QUADRANTS.forEach(q => { %>
+                    <div class="teeth-box">
+                        <div class="t"><%= q.title %></div>
+                        <code><%= q.teeth.join(' ') %></code>
+                    </div>
+                    <% }); %>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Вид работ</legend>
+                <div class="row">
+                    <label>Тип конструкции</label>
+                    <select name="work_kind">
+                        <% const curKind = order && order.teeth && order.teeth[0] ? order.teeth[0].kind : ''; %>
+                        <% catalog.WORK_KINDS.forEach(w => { %>
+                            <option value="<%= w.kind %>" <%= curKind === w.kind ? 'selected' : '' %>><%= w.title %></option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="grid">
+                    <div>
+                        <label>Материал</label>
+                        <input type="text" name="material" maxlength="120"
+                               value="<%= order && order.teeth && order.teeth[0] ? order.teeth[0].material || '' : '' %>">
+                    </div>
+                    <div>
+                        <label>Цвет</label>
+                        <select name="color">
+                            <option value="">— не указан —</option>
+                            <% const curColor = order && order.teeth && order.teeth[0] ? order.teeth[0].color || '' : ''; %>
+                            <% catalog.COLOR_SYSTEMS.forEach(c => { %>
+                                <option value="<%= c %>" <%= curColor === c ? 'selected' : '' %>><%= c %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                </div>
+                <div class="row" style="margin-top:12px">
+                    <label>Обработка индивидуального абатмента</label>
+                    <div class="checks">
+                        <% const curAb = order && order.teeth && order.teeth[0] ? (order.teeth[0].abutment || '').split(',') : []; %>
+                        <% catalog.ABUTMENT_OPTIONS.forEach(o => { %>
+                        <label><input type="checkbox" name="abutment" value="<%= o.key %>" <%= curAb.includes(o.key) ? 'checked' : '' %>> <%= o.title %></label>
+                        <% }); %>
+                    </div>
+                </div>
+                <div class="row">
+                    <label>Отметки по работе</label>
+                    <div class="checks">
+                        <% const curFl = order && order.teeth && order.teeth[0] ? (order.teeth[0].flags || '').split(',') : []; %>
+                        <% catalog.FRAME_FLAGS.forEach(o => { %>
+                        <label><input type="checkbox" name="flags" value="<%= o.key %>" <%= curFl.includes(o.key) ? 'checked' : '' %>> <%= o.title %></label>
+                        <% }); %>
+                    </div>
+                </div>
+                <div class="row">
+                    <label>Поступило с заказом</label>
+                    <div class="checks">
+                        <% const curIn = order ? String(order.incoming || '').split(',') : []; %>
+                        <% catalog.INCOMING_OPTIONS.forEach(o => { %>
+                        <label><input type="checkbox" name="incoming" value="<%= o.key %>" <%= curIn.includes(o.key) ? 'checked' : '' %>> <%= o.title %></label>
+                        <% }); %>
+                    </div>
+                </div>
+                <div class="row">
+                    <label>Что требуется изготовить</label>
+                    <div class="checks">
+                        <% const curDel = order ? String(order.delivery || '').split(',') : []; %>
+                        <% catalog.DELIVERY_OPTIONS.forEach(o => { %>
+                        <label><input type="checkbox" name="delivery" value="<%= o.key %>" <%= curDel.includes(o.key) ? 'checked' : '' %>> <%= o.title %></label>
+                        <% }); %>
+                    </div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Материалы</legend>
+                <div id="mats">
+                    <% if (order && order.materials.length) { order.materials.forEach(m => { %>
+                    <div class="mat-row">
+                        <input type="text" name="material_name" value="<%= m.name %>" placeholder="Материал">
+                        <input type="number" name="material_qty" value="<%= m.qty %>" step="0.01" min="0" placeholder="Кол-во">
+                        <input type="text" name="material_unit" value="<%= m.unit %>" placeholder="ед.">
+                        <input type="text" name="material_note" value="<%= m.note || '' %>" placeholder="Примечание">
+                        <button type="button" class="btn" onclick="this.parentElement.remove()">✕</button>
+                    </div>
+                    <% }); } %>
+                </div>
+                <button type="button" class="btn" style="margin-top:8px" onclick="addMat()">+ Материал</button>
+                <% if (materials && materials.length) { %>
+                <div class="hint" style="margin-top:10px">
+                    Из справочника:
+                    <% materials.forEach((m, i) => { %>
+                        <a href="#" style="color:#2b6cb0" onclick="fillMat('<%= m.name %>','<%= m.unit %>');return false"><%= m.name %></a><%= i < materials.length-1 ? ', ' : '' %>
+                    <% }); %>
+                </div>
+                <% } %>
+            </fieldset>
+
+            <fieldset>
+                <legend>Комментарий</legend>
+                <div class="row">
+                    <label>Описание конструкции и пожелания</label>
+                    <textarea name="comment" maxlength="4000"><%= order ? order.comment || '' : '' %></textarea>
+                </div>
+                <% if (isDentist) { %>
+                <div class="row">
+                    <label>Комментарий стоматолога для лаборатории</label>
+                    <textarea name="dentist_note" maxlength="4000"><%= order ? order.dentist_note || '' : '' %></textarea>
+                </div>
+                <% } %>
+                <div class="row">
+                    <label>Комментарий к зубам</label>
+                    <input type="text" name="tooth_note" maxlength="1000"
+                           value="<%= order && order.teeth && order.teeth[0] ? order.teeth[0].note || '' : '' %>"
+                           placeholder="Например: анатомическая форма, плечо 1 мм">
+                </div>
+            </fieldset>
+
+            <% if (!isDentist) { %>
+            <fieldset>
+                <legend>Организационное</legend>
+                <div class="grid">
+                    <div>
+                        <label>Этап</label>
+                        <select name="stage">
+                            <% catalog.STAGES.forEach(s => { %>
+                                <option value="<%= s.key %>" <%= order && order.stage === s.key ? 'selected' : '' %>><%= s.title %></option>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Взято в работу</label>
+                        <input type="datetime-local" name="taken_at"
+                               value="<%= order && order.taken_at ? order.taken_at.slice(0,16).replace(' ','T') : '' %>">
+                    </div>
+                    <div>
+                        <label>Обещано клиенту</label>
+                        <input type="date" name="promised_at"
+                               value="<%= order && order.promised_at ? order.promised_at.slice(0,10) : '' %>">
+                    </div>
+                    <div>
+                        <label>Срочность</label>
+                        <select name="priority">
+                            <option value="0" <%= order && order.priority ? '' : 'selected' %>>Обычный</option>
+                            <option value="1" <%= order && order.priority ? 'selected' : '' %>>Срочный</option>
+                        </select>
+                    </div>
+                </div>
+            </fieldset>
+            <% } %>
+        </main>
+
+        <div class="sticky-save">
+            <a class="btn" href="<%= order ? '/orders/' + order.id : '/orders' %>">Отмена</a>
+            <button class="btn btn-primary" type="submit">Сохранить наряд</button>
+        </div>
+    </form>
+
+    <script>
+    function addMat(name, qty, unit) {
+        const box = document.getElementById('mats');
+        const row = document.createElement('div');
+        row.className = 'mat-row';
+        row.innerHTML =
+            '<input type="text" name="material_name" placeholder="Материал" value="' + (name||'') + '">' +
+            '<input type="number" name="material_qty" step="0.01" min="0" placeholder="Кол-во" value="' + (qty||1) + '">' +
+            '<input type="text" name="material_unit" placeholder="ед." value="' + (unit||'шт') + '">' +
+            '<input type="text" name="material_note" placeholder="Примечание">' +
+            '<button type="button" class="btn" onclick="this.parentElement.remove()">✕</button>';
+        box.appendChild(row);
+    }
+    function fillMat(name, unit) { addMat(name, 1, unit); }
+    </script>
+</body>
+</html>

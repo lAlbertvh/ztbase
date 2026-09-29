@@ -113,6 +113,11 @@ function migrateOrders(db) {
 
   addColSafe('orders', 'dentist_note', 'TEXT');
   addColSafe('orders', 'archived', 'INTEGER DEFAULT 0');
+  // Что поступило с заказом и что требуется изготовить: набором ключей
+  // через запятую. Отдельная таблица не нужна — это набор флагов
+  // без собственных атрибутов, и по наряду они всегда нужны целиком.
+  addColSafe('orders', 'incoming', 'TEXT');
+  addColSafe('orders', 'delivery', 'TEXT');
   addColSafe('order_teeth', 'abutment', 'TEXT');
   addColSafe('order_teeth', 'flags', 'TEXT');
   addColSafe('order_stages', 'finished_at', 'TEXT');
