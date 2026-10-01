@@ -68,16 +68,38 @@
                     <tbody>
                     <% materials.forEach(m => { %>
                     <tr>
-                        <td class="<%= m.active ? '' : 'off' %>"><%= m.name %></td>
-                        <td><%= m.category || '' %></td>
-                        <td><%= m.unit %></td>
-                        <td class="muted"><%= m.note || '' %></td>
-                        <td>
-                            <form method="post" action="/orders/catalog/materials/<%= m.id %>/toggle">
-                                <button class="btn" type="submit"><%= m.active ? 'Скрыть' : 'Вернуть' %></button>
-                            </form>
-                        </td>
-                    </tr>
+                        <td colspan="5" style="padding:0">
+                            <details>
+                                <summary style="cursor:pointer;padding:8px 12px;list-style:none">
+                                    <span class="<%= m.active ? '' : 'off' %>"><%= m.name %></span>
+                                    <span class="muted" style="font-size:12px"> — <%= m.category || 'без категории' %>, <%= m.unit %><%= m.active ? '' : ' · скрыт' %></span>
+                                </summary>
+                                <form method="post" action="/orders/catalog/materials/<%= m.id %>" style="padding:8px 12px 12px;border-top:1px solid var(--border)">
+                                    <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                        <div style="flex:2 1 200px"><label>Название</label><input type="text" name="name" value="<%= m.name %>" maxlength="120"></div>
+                                        <div style="flex:1 1 130px"><label>Категория</label><input type="text" name="category" value="<%= m.category || '' %>" maxlength="60"></div>
+                                        <div style="flex:0 0 90px"><label>Ед.</label><input type="text" name="unit" value="<%= m.unit %>" maxlength="20"></div>
+                                        <div style="flex:3 1 220px"><label>Примечание</label><input type="text" name="note" value="<%= m.note || '' %>" maxlength="300"></div>
+                                    </div>
+                                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                                        <button class="btn btn-primary" type="submit">Сохранить</button>
+                                    </div>
+                                </form>
+</details>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td colspan="4" style="text-align:right;white-space:nowrap">
+                                <form method="post" action="/orders/catalog/materials/<%= m.id %>/toggle" style="display:inline">
+                                    <button class="btn" type="submit"><%= m.active ? 'Скрыть' : 'Вернуть' %></button>
+                                </form>
+                                <form method="post" action="/orders/catalog/materials/<%= m.id %>/delete" style="display:inline"
+                                      onsubmit="return confirm('Скрыть материал «<%= m.name %>»? Он останется в старых нарядах.')">
+                                    <button class="btn" type="submit">Убрать</button>
+                                </form>
+                            </td>
+                        </tr>
                     <% }); %>
                     </tbody>
                 </table>

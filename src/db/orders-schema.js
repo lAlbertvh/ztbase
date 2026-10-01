@@ -97,8 +97,65 @@ function migrateOrders(db) {
     CREATE INDEX IF NOT EXISTS idx_orders_lab_created ON orders(lab_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_teeth_order ON order_teeth(order_id);
     CREATE INDEX IF NOT EXISTS idx_stages_order ON order_stages(order_id, created_at);
+
+    -- Переписка внутри наряда.
+    --
+    -- Смысл в том, чтобы врач и техник решали вопрос прямо в заказе:
+    -- «поставьте импланты вместо 28-го», «сделайте мост из циркона» —
+    -- и из этого разговора рождался наряд. Поэтому сообщения привязаны к
+    -- наряду, а не болтаются общим списком.
+    --
+    -- author_user_id — автор по users.id, а не по имени: сотрудника могут
+    -- переименовать, и тогда его старые сообщения стали бы чужими.
+    -- author_name копируется для показа, чтобы не подтягивать пользователя
+    -- на каждое сообщение и не ломать историю при отключении учётки.
+    CREATE TABLE IF NOT EXISTS order_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      lab_id INTEGER NOT NULL DEFAULT 1,
+      author_user_id INTEGER,
+      author_name TEXT,
+      author_role TEXT,
+      body TEXT NOT NULL,
+      -- Согласованные конструкции из переписки: по кодам из справочника.
+      -- Хранятся именно коды, а не id: код переживает смену прайса, и
+      -- кнопка «Заполнить наряд» остаётся рабочей после обновления цен.
+      proposal_codes TEXT,
+      -- Сообщение, из которого наряд уже собрали: помечаем, чтобы
+      -- повторное нажатие не плодило дубли позиций.
+      applied_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_messages_order
+      ON order_messages(order_id, id);
     CREATE INDEX IF NOT EXISTS idx_order_materials_order ON order_materials(order_id);
     CREATE INDEX IF NOT EXISTS idx_materials_lab ON materials(lab_id, active);
+
+    -- Конструкции, заказанные в наряде. Отдельная от order_teeth
+    -- таблица, потому что наряд почти никогда не бывает «одна
+    -- конструкция на все зубы»: врач пишет «17,16 съёмная, вместо 28
+    -- имплант, между ними мост», и всё это три разные позиции с
+    -- разными ценами. Раньше в наряде было ровно одно поле work_kind
+    -- на весь заказ, из-за чего состав работы не помещался в наряд.
+    -- construction_id nullable: позиция может остаться в наряде даже
+    -- если её убрали из справочника, поэтому копируем название и цену.
+    CREATE TABLE IF NOT EXISTS order_constructions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      lab_id INTEGER NOT NULL DEFAULT 1,
+      construction_id INTEGER,
+      code TEXT,
+      title TEXT NOT NULL,
+      price REAL,
+      price_tech REAL,
+      qty REAL NOT NULL DEFAULT 1,
+      material TEXT,
+      note TEXT,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_constructions_order
+      ON order_constructions(order_id);
   `);
 
   // Более поздние версии добавляли колонки к уже созданным таблицам.
@@ -121,6 +178,56 @@ function migrateOrders(db) {
   addColSafe('order_teeth', 'abutment', 'TEXT');
   addColSafe('order_teeth', 'flags', 'TEXT');
   addColSafe('order_stages', 'finished_at', 'TEXT');
+  // Клиника наряда: по ней врачи одной клиники видят общие заказы.
+  //
+  // Колонка допускает NULL: наряд может остаться без клиники, если автор
+  // ни к одной не привязан (личный заказ лаборатории, старые данные).
+  // NULL — это не «неизвестная клиника»: такой наряд остаётся доступным
+  // автору и администратору, а не пропадает у всех сразу.
+  addColSafe('orders', 'clinic_id', 'INTEGER');
+
+  // users.clinic_id объявляет миграция конструкций. Объявляем здесь же:
+  // перенос нарядов ниже читает именно эту колонку, а порядок вызова
+  // миграций однажды изменится — и перенос молча перестанет работать.
+  addColSafe('users', 'clinic_id', 'INTEGER');
+
+  // Индекс создаём после addColSafe: в общем блоке выше колонки ещё нет,
+  // и на пустой базе CREATE INDEX упал бы с «no such column».
+  db.exec('CREATE INDEX IF NOT EXISTS idx_orders_lab_clinic ON orders(lab_id, clinic_id, created_at DESC)');
+
+  // Наряды, заведённые до появления колонки, привязываем к клинике
+  // их автора. Условие clinic_id IS NULL делает перенос одноразовым:
+  // повторный запуск сервера не переписывает уже проставленные вручную
+  // правки, а новые наряды с клиникой не затрагивает.
+  const filled = db.prepare(`
+    UPDATE orders SET clinic_id = (
+      SELECT u.clinic_id FROM users u
+      WHERE u.lab_id = orders.lab_id AND u.name = orders.created_by
+    )
+    WHERE clinic_id IS NULL
+      AND EXISTS (
+        SELECT 1 FROM users u
+        WHERE u.lab_id = orders.lab_id AND u.name = orders.created_by
+      )
+  `).run().changes;
+  if (filled > 0) {
+    console.log(`Клиника проставлена у ${filled} наряд(ах), заведённых до перехода`);
+  }
+
+  // Автор_id у сообщений: переименование сотрудника не должно делать его
+  // старые сообщения чужими.
+  addColSafe('order_messages', 'author_user_id', 'INTEGER');
+
+  // Две цены у позиции наряда: для врача и себестоимость для техника.
+  // В наряде хранится копия обеих — правка прайса не должна менять уже
+  // согласованные суммы.
+  addColSafe('order_constructions', 'price_tech', 'REAL');
+
+  // Скидка в процентах от цены для врача. Хранится именно процент,
+  // а не итоговая сумма: при правке цен скидка должна пересчитаться
+  // сама, иначе клиника увидела бы одну сумму, а лаборатория считала бы
+  // другую. На себестоимость скидка не влияет.
+  addColSafe('orders', 'discount', 'REAL NOT NULL DEFAULT 0');
 
   // Номера нарядов уникальны внутри лаборатории, а не глобально:
   // две разные лаборатории вправе использовать один и тот же номер.

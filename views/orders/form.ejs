@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png">
     <title><%= order ? 'Наряд ' + order.order_number : 'Новый наряд' %></title>
+    <link rel="stylesheet" href="/css/app.css">
     <style>
         * { box-sizing: border-box; }
         body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -45,11 +46,28 @@
         .mat-row { display: grid; gap: 8px; grid-template-columns: 2fr .6fr .7fr 2fr auto;
                    margin-bottom: 6px; align-items: center; }
         @media (max-width: 640px) { .mat-row { grid-template-columns: 1fr 1fr; } }
+        .con-row { display: grid; gap: 8px; align-items: center;
+                   grid-template-columns: minmax(140px, 1.6fr) 110px 90px minmax(120px, 1.2fr) auto;
+                   padding: 6px 0; border-bottom: 1px solid #eef0f3; }
+        /* Своя строка без привязки к справочнику: две цены вместо одной. */
+        .con-row:has(input[name=construction_custom]) {
+                   grid-template-columns: minmax(140px, 1.6fr) 100px 100px 90px minmax(120px, 1.2fr) auto; }
+        @media (max-width: 720px) {
+            .con-row, .con-row:has(input[name=construction_custom]) { grid-template-columns: 1fr 1fr; }
+        }
+        .con-name { font-weight: 600; }
+        .con-price { font-size: 13px; color: #6b7280; }
+        input.con-price { font-size: 15px; color: #23272f; }
+        .totals { border: 1px solid #e2e4e9; border-radius: 8px; overflow: hidden; }
+        .t-row { display: flex; justify-content: space-between; gap: 12px;
+                 padding: 7px 10px; font-size: 14px; border-bottom: 1px solid #eef0f3; }
+        .t-row:last-child { border-bottom: none; }
+        .t-total { background: #f0f7f0; font-weight: 700; }
+        .t-muted { color: #6b7280; font-size: 13px; }
     </style>
 </head>
 <body>
-    <header>
-        <a href="/orders" class="btn" style="color:#23272f">&larr; Наряды</a>
+    <header class="app-header">
         <h1><%= order ? 'Наряд ' + order.order_number : 'Новый заказ-наряд' %></h1>
         <span class="who"><%= currentUser %></span>
     </header>
@@ -59,6 +77,9 @@
         <% if (isDentist) { %><input type="hidden" name="stage" value="new"><% } %>
 
         <main>
+            <%# Разделы доступны и отсюда: форму открывают из разных мест,
+                и возвращаться к заказ-нарядам кнопкой в шапке было мало. %>
+            <%- include('../partials/nav', { active: 'orders', inline: true, currentUser, isDentist }) %>
             <fieldset>
                 <legend>Заказчик</legend>
                 <div class="grid">
@@ -67,8 +88,27 @@
                         <input type="text" name="order_number" required maxlength="60"
                                value="<%= order ? order.order_number : '' %>">
                     </div>
+                    <%# Клиника выбирается из справочника, а не пишется текстом:
+                        написанное руками название не сопоставить с учётными
+                        записями врачей, и наряд такой клиники потом не нашёлся
+                        бы в её списке. %>
                     <div>
-                        <label>Лаборатория / клиника</label>
+                        <% if (isDentist) { %>
+                            <label>Клиника</label>
+                            <input type="text" value="<%= myClinic || 'Ваша клиника' %>" readonly>
+                        <% } else { %>
+                            <label>Клиника</label>
+                            <select name="clinic_id">
+                                <option value="">— не указана —</option>
+                                <% clinics.forEach(function (c) { %>
+                                    <option value="<%= c.id %>"
+                                        <%= order && String(order.clinic_id) === String(c.id) ? 'selected' : '' %>><%= c.name %></option>
+                                <% }) %>
+                            </select>
+                        <% } %>
+                    </div>
+                    <div>
+                        <label>Заказчик в свободной форме</label>
                         <input type="text" name="customer" maxlength="200"
                                value="<%= order ? order.customer || '' : '' %>">
                     </div>
@@ -178,12 +218,123 @@
                 </div>
             </fieldset>
 
+<% const curCons = (order && order.constructions) ? order.constructions : [];
+   const curDiscount = order ? (Number(order.discount) || 0) : 0; %>
+<% if (canDiscount !== false) { %>
+              <fieldset>
+                  <legend>Скидка и итог</legend>
+                <div class="row" style="align-items:flex-start;flex-wrap:wrap;gap:16px">
+                    <div>
+                        <label>Скидка клинике</label>
+                        <div class="checks" id="disc-presets">
+                            <% [0, 10, 15, 20, 25, 30, 40, 50, 65].forEach(function (p) { %>
+                            <label style="display:inline-flex;align-items:center;gap:4px">
+                                <input type="radio" name="discount_preset" value="<%= p %>"
+                                       <%= Number(curDiscount) === p ? 'checked' : '' %>>
+                                <%= p === 0 ? 'нет' : p + '%' %>
+                            </label>
+                            <% }); %>
+                        </div>
+                        <div class="hint" style="margin-top:6px">
+                            Своя скидка:
+                            <input type="text" name="discount" id="disc-input" inputmode="decimal"
+                                   value="<%= curDiscount || '' %>" placeholder="0" style="width:80px;display:inline-block;padding:5px 8px">
+                            %
+                        </div>
+                    </div>
+                    <div style="flex:1 1 220px">
+                        <label>Итого по конструкциям</label>
+                        <div id="totals" class="totals">
+                            <div class="t-row"><span>Цена для врача</span><b id="sum-client">0 ₽</b></div>
+                            <div class="t-row" id="row-discount" hidden><span>Скидка <span id="lbl-discount"></span></span><b id="sum-discount">0 ₽</b></div>
+                            <div class="t-row t-total"><span>К оплате</span><b id="sum-payable">0 ₽</b></div>
+                            <div class="t-row t-muted"><span>Себестоимость для техника</span><b id="sum-tech">0 ₽</b></div>
+                        </div>
+                        <div class="hint" style="margin-top:6px">
+                            Скидка уменьшает сумму для врача. Себестоимость для техника
+                            не меняется — скидка идёт из маржи лаборатории.
+                        </div>
+                      </div>
+                  </div>
+              </fieldset>
+              <% } %>
+  
+              <fieldset>
+                  <legend>Конструкции</legend>
+                <p class="hint" style="margin:0 0 10px">
+                    Выберите, что изготавливается. Можно выбрать несколько —
+                    например, съёмную конструкцию на 17,16 и мост из циркона
+                    на месте импланта. Выбирать могут и врач, и техник.
+                </p>
+
+<div id="cons">
+                    <% curCons.forEach(function (c) { %>
+                    <div class="mat-row con-row">
+                        <input type="hidden" name="construction_id" value="<%= c.construction_id || '' %>">
+                        <% if (c.construction_id) { %>
+                        <span class="con-name"><%= c.title %></span>
+                        <span class="con-price" data-price="<%= c.price === null || c.price === undefined ? '' : c.price %>"
+                              data-price-tech="<%= c.price_tech === null || c.price_tech === undefined ? '' : c.price_tech %>"></span>
+                        <% } else { %>
+                        <input type="text" name="construction_custom" class="con-name" maxlength="200"
+                               value="<%= c.title %>" placeholder="Своя конструкция">
+                        <% if (canSetPrices !== false) { %>
+                        <input type="text" name="construction_custom_price" class="con-price"
+                               inputmode="decimal" placeholder="цена, ₽" value="<%= (c.price === null || c.price === undefined) ? '' : c.price %>">
+                        <input type="text" name="construction_custom_price_tech" class="con-price"
+                               inputmode="decimal" placeholder="себест., ₽" value="<%= (c.price_tech === null || c.price_tech === undefined) ? '' : c.price_tech %>">
+                        <% } else { %>
+                        <span class="con-price">цена назначит администратор</span>
+                        <% } %>
+                        <% } %>
+                        <input type="number" name="construction_qty" value="<%= c.qty %>" step="0.01" min="0" placeholder="Кол-во" style="flex:0 0 90px">
+                        <input type="text" name="construction_material" value="<%= c.material || '' %>" list="mat-catalog" placeholder="Материал" maxlength="120">
+                        <button type="button" class="btn" onclick="this.parentElement.remove()">✕</button>
+                    </div>
+                    <% }); %>
+                </div>
+
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+                    <div style="flex:2 1 320px">
+                        <label>Добавить конструкцию</label>
+                        <select id="con-picker">
+                            <option value="">— выберите из справочника —</option>
+                            <% (constructions || []).forEach(function (g) { %>
+                                <optgroup label="<%= g.title %>">
+                                    <% g.items.forEach(function (c) { %>
+                                          <option value="<%= c.id %>" data-title="<%= c.title %>"
+                                                  data-price="<%= c.price === null ? '' : c.price %>"
+                                                  data-price-tech="<%= c.price_tech === null || c.price_tech === undefined ? '' : c.price_tech %>">
+                                            <%= c.section ? c.section + ' · ' : '' %><%= c.title %><%= c.price === null ? ' (цена не загружена)' : ' — ' + c.price + ' ₽' %>
+                                        </option>
+                                    <% }); %>
+                                </optgroup>
+                            <% }); %>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="addCon()">+ Из справочника</button>
+                    <button type="button" class="btn" onclick="addOwnCon()">+ Своя конструкция</button>
+                </div>
+
+                <% if (!constructions || !constructions.length) { %>
+                  <div class="hint" style="margin-top:10px">
+                      Справочник пуст — конструкции заведите в админке:
+                    <a href="/orders/catalog/constructions">справочник конструкций</a>.
+                </div>
+                <% } %>
+            </fieldset>
+
             <fieldset>
                 <legend>Материалы</legend>
+                <datalist id="mat-catalog">
+                    <% (materials || []).forEach(function (m) { %>
+                    <option value="<%= m.name %>"><%= m.unit || 'шт' %></option>
+                    <% }); %>
+                </datalist>
                 <div id="mats">
                     <% if (order && order.materials.length) { order.materials.forEach(m => { %>
                     <div class="mat-row">
-                        <input type="text" name="material_name" value="<%= m.name %>" placeholder="Материал">
+                        <input type="text" name="material_name" value="<%= m.name %>" list="mat-catalog" placeholder="Материал">
                         <input type="number" name="material_qty" value="<%= m.qty %>" step="0.01" min="0" placeholder="Кол-во">
                         <input type="text" name="material_unit" value="<%= m.unit %>" placeholder="ед.">
                         <input type="text" name="material_note" value="<%= m.note || '' %>" placeholder="Примечание">
@@ -268,7 +419,7 @@
         const row = document.createElement('div');
         row.className = 'mat-row';
         row.innerHTML =
-            '<input type="text" name="material_name" placeholder="Материал" value="' + (name||'') + '">' +
+            '<input type="text" name="material_name" placeholder="Материал" list="mat-catalog" value="' + (name||'') + '">' +
             '<input type="number" name="material_qty" step="0.01" min="0" placeholder="Кол-во" value="' + (qty||1) + '">' +
             '<input type="text" name="material_unit" placeholder="ед." value="' + (unit||'шт') + '">' +
             '<input type="text" name="material_note" placeholder="Примечание">' +
@@ -276,6 +427,184 @@
         box.appendChild(row);
     }
     function fillMat(name, unit) { addMat(name, 1, unit); }
-    </script>
+
+    // Конструкция добавляется по id из справочника; название берём из
+    // data-title выбранной опции и вставляем через textContent, а не
+    // innerHTML, чтобы название из справочника не могло разорвать
+    // разметку страницы.
+    function addCon() {
+        const picker = document.getElementById('con-picker');
+        if (!picker || !picker.value) { alert('Выберите конструкцию из списка'); return; }
+        const opt = picker.options[picker.selectedIndex];
+
+        const box = document.getElementById('cons');
+        const row = document.createElement('div');
+        row.className = 'mat-row con-row';
+
+        const id = document.createElement('input');
+        id.type = 'hidden'; id.name = 'construction_id'; id.value = opt.value;
+
+          const name = document.createElement('span');
+          name.className = 'con-name'; name.textContent = opt.dataset.title || opt.text;
+  
+          // Обе цены едут в data-атрибутах строки, а не в скрытые поля:
+          // итог считается на клиенте, а при сохранении сервер всё равно
+          // перечитывает справочник, поэтому доверять этим числам нельзя.
+          const price = document.createElement('span');
+          price.className = 'con-price';
+          price.dataset.price = opt.dataset.price || '';
+          price.dataset.priceTech = opt.dataset.priceTech || '';
+          price.textContent = opt.dataset.price ? opt.dataset.price + ' ₽' : 'цена не загружена';
+  
+          const qty = document.createElement('input');
+        qty.type = 'number'; qty.name = 'construction_qty';
+        qty.step = '0.01'; qty.min = '0'; qty.value = '1';
+        qty.style.flex = '0 0 90px';
+
+        const material = document.createElement('input');
+        material.type = 'text'; material.name = 'construction_material';
+        material.maxLength = 120; material.placeholder = 'Материал';
+
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'btn'; del.textContent = '✕';
+        del.onclick = function () { this.parentElement.remove(); };
+
+          row.append(id, name, price, qty, material, del);
+          box.appendChild(row);
+  
+          picker.value = '';
+          qty.focus();
+          recalc();
+      }
+
+    // Своя конструкция: пустой construction_id и свободное название.
+    // Такой позиции нет в справочнике, но она сохраняется в наряд так же,
+    // как справочниковая, и попадает в учёт и суммы.
+    function addOwnCon() {
+        const box = document.getElementById('cons');
+        const row = document.createElement('div');
+        row.className = 'mat-row con-row';
+
+        const id = document.createElement('input');
+        id.type = 'hidden'; id.name = 'construction_id'; id.value = '';
+
+        const title = document.createElement('input');
+        title.type = 'text'; title.name = 'construction_custom';
+        title.maxLength = 200; title.placeholder = 'Своя конструкция';
+        title.className = 'con-name';
+
+          // Поля цен есть только у администратора: у врача и техника их
+          // нет и в разметке, и в разборе формы, поэтому подделать цену
+          // подстановкой поля не получится.
+          let priceTech = null;
+          if (CAN_SET_PRICES) {
+              const price = document.createElement('input');
+              price.type = 'text'; price.name = 'construction_custom_price';
+              price.inputMode = 'decimal'; price.placeholder = 'цена, ₽';
+              price.className = 'con-price';
+
+              priceTech = document.createElement('input');
+              priceTech.type = 'text'; priceTech.name = 'construction_custom_price_tech';
+              priceTech.inputMode = 'decimal'; priceTech.placeholder = 'себест., ₽';
+              priceTech.className = 'con-price';
+
+              row.append(id, title, price, priceTech);
+          } else {
+              const price = document.createElement('span');
+              price.className = 'con-price';
+              price.textContent = 'цена назначит администратор';
+              row.append(id, title, price);
+          }
+  
+          const qty = document.createElement('input');
+        qty.type = 'number'; qty.name = 'construction_qty';
+        qty.step = '0.01'; qty.min = '0'; qty.value = '1';
+        qty.style.flex = '0 0 90px';
+
+        const material = document.createElement('input');
+        material.type = 'text'; material.name = 'construction_material';
+        material.maxLength = 120; material.placeholder = 'Материал';
+        material.setAttribute('list', 'mat-catalog');
+
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'btn'; del.textContent = '✕';
+        del.onclick = function () { this.parentElement.remove(); };
+
+          row.append(qty, material, del);
+          box.appendChild(row);
+          title.focus();
+          recalc();
+      }
+
+      // ── Итоги ────────────────────────────────────────────────────
+      // Считаются на клиенте, чтобы администратор не ждал перезагрузки
+      // после каждого изменения. Это только предпросмотр: настоящие
+      // суммы сервер считает сам из справочника и пересчитывает при
+      // сохранении, поэтому подделать итог в браузере нельзя.
+      const CAN_SET_PRICES = <%= canSetPrices === false ? 'false' : 'true' %>;
+
+      const rub = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
+      const money = n => rub.format(Math.round(n * 100) / 100) + ' ₽';
+
+      function num(v) {
+          const s = String(v == null ? '' : v).trim().replace(/\s/g, '').replace(',', '.');
+          if (!s) return null;
+          const n = Number(s);
+          return Number.isFinite(n) && n >= 0 ? n : null;
+      }
+
+      function recalc() {
+          let client = 0, tech = 0, missingClient = 0, missingTech = 0;
+          document.querySelectorAll('#cons .con-row').forEach(row => {
+              const qty = num(row.querySelector('input[name=construction_qty]')?.value) || 0;
+              const ownPrice = row.querySelector('input[name=construction_custom_price]');
+              const ownTech  = row.querySelector('input[name=construction_custom_price_tech]');
+              const ref      = row.querySelector('.con-price[data-price]');
+              const c = ownPrice ? num(ownPrice.value) : num(ref?.dataset.price);
+              const t = ownTech  ? num(ownTech.value)  : num(ref?.dataset.priceTech);
+              if (c === null) missingClient++; else client += c * qty;
+              if (t === null) missingTech++;  else tech   += t * qty;
+          });
+
+          const d = Math.min(Math.max(num(document.getElementById('disc-input')?.value) || 0, 0), 100);
+          const discount = client * d / 100;
+          const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+
+          set('sum-client', money(client));
+          set('sum-discount', '−' + money(discount));
+          set('sum-payable', money(client - discount));
+          set('sum-tech', money(tech));
+          const lbl = document.getElementById('lbl-discount');
+          if (lbl) lbl.textContent = d ? d + '%' : '';
+          const rowD = document.getElementById('row-discount');
+          if (rowD) rowD.hidden = !(d > 0);
+      }
+
+      // Скидка живёт в поле discount, радиокнопки только подставляют
+      // значение в него: иначе сервер получил бы две разные скидки из
+      // одной формы и не понял бы, какую применить.
+      function setDiscount(v) {
+          const input = document.getElementById('disc-input');
+          if (input) input.value = v;
+          recalc();
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+          recalc();
+          document.querySelectorAll('input[name=construction_qty]').forEach(el => el.addEventListener('input', recalc));
+          document.querySelectorAll('input[name=construction_custom_price], input[name=construction_custom_price_tech]')
+                  .forEach(el => el.addEventListener('input', recalc));
+          const disc = document.getElementById('disc-input');
+          if (disc) disc.addEventListener('input', function () {
+              document.querySelectorAll('input[name=discount_preset]').forEach(r => r.checked = false);
+              recalc();
+          });
+          document.querySelectorAll('input[name=discount_preset]').forEach(r =>
+              r.addEventListener('change', function () { setDiscount(r.value); }));
+          document.getElementById('cons')?.addEventListener('click', function (ev) {
+              if (ev.target.closest('button')) recalc();
+          });
+      });
+      </script>
 </body>
 </html>

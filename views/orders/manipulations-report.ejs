@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f59e0b">
+    <title>Манипуляции по техникам</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        .period { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px; }
+        .period > div { flex: 0 0 160px; }
+        .period label { display: block; font-size: 12px; color: var(--ink-3); margin-bottom: 3px; }
+        .user { margin-bottom: 16px; }
+        .user h2 { font-size: 16px; margin: 0; padding: 10px 14px; background: var(--surface-2);
+                   border-radius: 8px 8px 0 0; border-bottom: 1px solid var(--line); }
+        .user h2 .sum { float: right; font-size: 17px; color: var(--ok); }
+        .user .tot td { font-weight: 700; background: #fafbfc; }
+        .grand { font-size: 18px; font-weight: 700; padding: 14px; background: #f0fdf4;
+                 border: 1px solid var(--ok); border-radius: 8px; margin-bottom: 16px; }
+        .hint { font-size: 13px; color: var(--ink-3); background: #fffbeb;
+                border: 1px solid #fde68a; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <h1>Манипуляции по техникам</h1>
+        <a class="btn btn-sm" href="/orders">К нарядам</a>
+        <a class="btn btn-sm" href="/orders/catalog/manipulations">Справочник</a>
+        <span class="who"><%= currentUser %> · <a href="/logout">выход</a></span>
+    </header>
+
+    <main>
+    <%- include('../partials/nav', { active: 'orders', inline: true, currentUser, isDentist: false }) %>
+
+    <form method="get" action="/orders/stats/manipulations" class="period">
+        <div>
+            <label>С</label>
+            <input type="date" name="date_from" value="<%= dateFrom %>">
+        </div>
+        <div>
+            <label>По</label>
+            <input type="date" name="date_to" value="<%= dateTo %>">
+        </div>
+        <button class="btn btn-primary" type="submit">Показать</button>
+        <a class="btn" href="/orders/stats/manipulations?date_from=<%= monthStart %>">Текущий месяц</a>
+        <a class="btn" href="/orders/stats/manipulations">Всё время</a>
+    </form>
+
+    <% if (!report.byUser.length) { %>
+        <div class="empty">
+            За выбранный период манипуляций не отмечено.<br>
+            Техник отмечает их на <a href="/orders">наряде</a> по QR-коду.
+        </div>
+    <% } else { %>
+        <% if (!dateFrom && !dateTo) { %>
+            <p class="hint">
+                Показан период «всё время». Для расчёта зарплаты удобнее
+                выбрать месяц — суммы соберутся только по выбранным датам.
+            </p>
+        <% } %>
+
+        <div class="grand">
+            Всего манипуляций: <%= report.grandOperations %> · на сумму
+            <%= report.grandTotal.toLocaleString('ru-RU') %> ₽
+        </div>
+
+        <% report.byUser.forEach(function (u) { %>
+            <div class="card user">
+                <h2>
+                    <%= u.user %>
+                    <span class="sum"><%= u.total.toLocaleString('ru-RU') %> ₽</span>
+                </h2>
+                <div style="overflow-x:auto">
+                <table>
+                    <thead>
+                        <tr><th>Код</th><th>Манипуляция</th><th>Кол-во</th><th>Цена, ₽</th><th>Сумма, ₽</th></tr>
+                    </thead>
+                    <tbody>
+                    <% u.items.forEach(function (i) { %>
+                        <tr>
+                            <td class="muted"><%= i.code %></td>
+                            <td><%= i.name %></td>
+                            <td><%= i.done %></td>
+                            <td><%= i.price.toLocaleString('ru-RU') %></td>
+                            <td><%= i.sum.toLocaleString('ru-RU') %></td>
+                        </tr>
+                    <% }); %>
+                    <tr class="tot">
+                        <td colspan="2">Итого по технику</td>
+                        <td><%= u.operations %></td>
+                        <td></td>
+                        <td><%= u.total.toLocaleString('ru-RU') %></td>
+                    </tr>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        <% }); %>
+    <% } %>
+
+    <p class="muted">
+        Отчёт собран по журналу отметок, а не по нарядам: закрытый или
+        удалённый наряд на расчёт не влияет. Снятая отметка вычитается.
+    </p>
+    </main>
+</body>
+</html>

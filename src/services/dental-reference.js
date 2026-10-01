@@ -17,7 +17,7 @@ const QUADRANTS = [
 // Основные виды работ. kind — короткий код, попадает в печатный бланк
 // и в подсчёт статистики по лаборатории.
 const WORK_KINDS = [
-  { kind: 'crown',        title: 'Корона' },
+  { kind: 'crown',        title: 'Коронка' },
   { kind: 'bridge',       title: 'Мост' },
   { kind: 'removable',    title: 'Съёмная конструкция' },
   { kind: 'fixed',        title: 'Несъёмная конструкция' },

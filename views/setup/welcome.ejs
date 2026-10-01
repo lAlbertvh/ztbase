@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Настройка — ZT Lab</title>
+<link rel="stylesheet" href="/css/setup.css">
+</head>
+<body>
+<header>
+  <div class="brand">ZT Lab</div>
+  <div class="sub">Первичная настройка лаборатории</div>
+</header>
+<main>
+  <div class="steps">
+    <div class="s"></div><div class="s"></div><div class="s"></div>
+    <div class="s"></div><div class="s"></div>
+  </div>
+
+  <div class="card">
+    <h2>Приветствуем Вас!</h2>
+    <p class="lead">Рады, что выбираете качество.</p>
+    <p>Для начала работы давайте заполним несколько пунктов. Всё, что вы
+       введёте сейчас, можно будет изменить потом — в настройках приложения.</p>
+    <p>Заполним по очереди: представимся, добавим клиник и их представителей,
+       перечислим услуги с ценами и заведём команду лаборатории.</p>
+  </div>
+
+  <div class="card">
+    <h2>Лаборатория уже заведена</h2>
+    <table>
+      <tbody>
+        <tr><td style="width:180px" class="muted">Название</td><td><%= lab.name %></td></tr>
+        <tr><td class="muted">Адрес для входа</td><td><code>/login?lab=<%= lab.slug %></code></td></tr>
+      </tbody>
+    </table>
+    <div class="hint">Если название вводить не хочется — пропустите шаг, назовём как есть,
+      переименуете в админке. Дальше можно вернуться к любому шагу.</div>
+  </div>
+
+  <div class="actions">
+    <a class="btn btn-primary" href="/setup/about">Начать настройку</a>
+    <!-- Форма, а не ссылка: пропуск должен записать в базу, что
+         настройка закрыта, иначе middleware вернёт нас в этот же мастер. -->
+    <form method="post" action="/setup/skip">
+      <button class="btn" type="submit">Пропустить и работать</button>
+    </form>
+  </div>
+</main>
+</body>
+</html>

@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png">
     <title>Exocad Хранилище 3D-файлов</title>
+    <link rel="stylesheet" href="/css/app.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -346,14 +347,18 @@
     <h1 class="page-header">Хранилище 3D-файлов 
         <span style="font-size: 0.7em;">(вы вошли как <strong><%= currentUser %></strong>)</span>
         <span class="header-buttons">
-            <a href="/orders" class="add-user-btn" style="background-color: #2563eb; color:#fff;">📋 Заказ-наряды</a>
             <% if (isAdmin) { %>
-                <a href="/titan" class="add-user-btn" style="background-color: #FF9800;">🔩 Титановые основания</a>
+                <a href="/add-user" class="add-user-btn">➕ Добавить пользователя</a>
             <% } %>
-            <a href="/add-user" class="add-user-btn">➕ Добавить пользователя</a>
             <a href="/logout" class="logout">Выйти</a>
         </span>
     </h1>
+
+    <div class="page">
+    <%# Переход между разделами — те же плитки, что в нарядах и титане.
+        Раньше ссылки на разделы были мелкими кнопками в шапке, а на
+        этом экране ещё и прятались за isAdmin. %>
+    <%- include('partials/nav', { active: 'files', inline: false, currentUser, isDentist: isAdmin ? false : true }) %>
 
     <!-- Форма загрузки (drag-and-drop) -->
     <div class="upload-form">
@@ -486,6 +491,7 @@
             <% } %>
         </tbody>
     </table>
+    </div><!-- /.page -->
 
     <script>
         // Сворачивание по месяцу и дню

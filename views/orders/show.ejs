@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png">
     <title>Наряд <%= order.order_number %></title>
+    <link rel="stylesheet" href="/css/app.css">
     <style>
         * { box-sizing: border-box; }
         body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -61,8 +62,7 @@
     </style>
 </head>
 <body>
-    <header>
-        <a href="/orders" class="btn" style="color:#23272f">&larr; Наряды</a>
+    <header class="app-header">
         <h1>Наряд <%= order.order_number %></h1>
         <span class="badge s-<%= order.stage %>"><%= catalog.STAGE_TITLE[order.stage] || order.stage %></span>
         <% if (order.priority) { %><span class="badge s-cancelled">Срочный</span><% } %>
@@ -70,11 +70,16 @@
     </header>
 
     <main>
+    <%# Раньше с карточки наряда нельзя было попасть ни в обмен файлами,
+        ни в титановые основания: в шапке стояла только кнопка «← Наряды».
+        Плитки разделов теперь есть на каждом экране. %>
+    <%- include('../partials/nav', { active: 'orders', inline: true, currentUser, isDentist }) %>
         <div class="card">
             <h2>Заказчик</h2>
             <div class="body">
-                <div class="kv">
-                    <div><div class="k">Лаборатория / клиника</div><div class="v"><%= order.customer || '—' %></div></div>
+                  <div class="kv">
+                      <div><div class="k">Клиника</div><div class="v"><%= order.clinic_name || '—' %></div></div>
+                      <div><div class="k">Заказчик в свободной форме</div><div class="v"><%= order.customer || '—' %></div></div>
                     <div><div class="k">Телефон</div><div class="v"><%= order.phone || '—' %></div></div>
                     <div><div class="k">E-mail</div><div class="v"><%= order.email || '—' %></div></div>
                     <div><div class="k">Пациент / внутренний номер</div><div class="v"><%= order.patient || '—' %></div></div>
@@ -164,6 +169,125 @@
         </div>
         <% } %>
 
+        <%# Чек-лист манипуляций и QR-код. Раньше в наряде не было ни того,
+            ни другого: техник не знал, что отмечать, и отметок не существовало. %>
+        <div class="card">
+            <h2>Манипуляции
+                <% if (!isDentist) { %>
+                    <a class="btn btn-sm" style="float:right;margin-top:-4px"
+                       href="/orders/<%= order.id %>/manipulations">Отметить →</a>
+                <% } %>
+            </h2>
+            <div class="body">
+                <% if (!manipulations || !manipulations.length) { %>
+                    <p class="muted">Манипуляции не заведены</p>
+                <% } else { %>
+                    <p style="margin:0 0 10px;font-size:14px">
+                        Выполнено <strong><%= manipCounts.done %></strong> из <strong><%= manipCounts.total %></strong>
+                    </p>
+                    <table>
+                        <thead><tr><th></th><th>Манипуляция</th><th>Код</th><th>Цена</th><% if (!isDentist) { %><th>Отметил</th><% } %></tr></thead>
+                        <tbody>
+                        <% manipulations.forEach(m => { %>
+                            <tr>
+                                <td style="width:26px"><%= m.done ? '✔' : '⬜' %></td>
+                                <td><%= m.name %></td>
+                                <td class="muted"><%= m.code %></td>
+                                <td><%= m.price ? m.price + ' ₽' : '—' %></td>
+                                <% if (!isDentist) { %><td class="muted"><%= m.done_by || '—' %><%= m.done_at ? ', ' + new Date(m.done_at).toLocaleString('ru-RU') : '' %></td><% } %>
+                            </tr>
+                        <% }); %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </div>
+        </div>
+
+        <%# QR-код ведёт на мобильную страницу отметок. Печатается вместе
+            с нарядом, чтобы техник мог отсканировать камерой телефона. %>
+        <div class="card">
+            <h2>Отметка на телефоне</h2>
+            <div class="body" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+                <img src="/orders/<%= order.id %>/qr.svg" alt="QR наряда" width="150" height="150"
+                     style="border:1px solid var(--line);border-radius:8px;background:#fff">
+                <div style="flex:1 1 200px">
+                    <p style="margin:0 0 8px;font-size:14px">
+                        Наведите камеру телефона на QR-код — откроется список
+                        манипуляций крупными кнопками. Отмечайте выполненное
+                        по ходу работы.
+                    </p>
+                    <a class="btn" href="/orders/<%= order.id %>/manipulations">Открыть список</a>
+                    <a class="btn" href="/orders/<%= order.id %>/manipulations?back=order" target="_blank" rel="noopener">Проверить на телефоне</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Конструкции</h2>
+            <div class="body">
+                <% if (!order.constructions || !order.constructions.length) { %>
+                    <p class="muted">Конструкции не указаны</p>
+                <% } else { %>
+                <table>
+                      <thead>
+                          <tr>
+                              <th>Код</th><th>Конструкция</th><th>Кол-во</th><th>Материал</th>
+                              <% if (showClientPrices) { %><th>Цена для врача</th><% } %>
+                              <% if (showTechPrices) { %><th>Себестоимость</th><% } %>
+                          </tr>
+                      </thead>
+                      <tbody>
+                      <% order.constructions.forEach(c => { %>
+                      <tr>
+                          <td><% if (c.construction_id) { %><code><%= c.code || '' %></code><% } else { %><span class="muted">своя</span><% } %></td>
+                          <td><%= c.title %></td>
+                          <td><%= c.qty %></td>
+                          <td class="muted"><%= c.material || '' %></td>
+                          <% if (showClientPrices) { %>
+                          <td style="white-space:nowrap"><%= c.price === null || c.price === undefined ? '—' : c.price + ' ₽' %></td>
+                          <% } %>
+                          <% if (showTechPrices) { %>
+                          <td style="white-space:nowrap"><%= c.price_tech === null || c.price_tech === undefined ? '—' : c.price_tech + ' ₽' %></td>
+                          <% } %>
+                      </tr>
+                      <% }); %>
+                      </tbody>
+                  </table>
+
+                  <% if (showClientPrices) { %>
+                  <table style="margin-top:10px;max-width:420px;margin-left:auto">
+                      <tbody>
+                          <tr><td>Сумма по прайсу</td>
+                              <td style="text-align:right;white-space:nowrap"><%= order.total.client %> ₽</td></tr>
+                          <% if (order.total.discount > 0) { %>
+                          <tr><td>Скидка <%= order.total.discount %>%</td>
+                              <td style="text-align:right;white-space:nowrap">− <%= order.total.saved %> ₽</td></tr>
+                          <% } %>
+                          <tr style="font-weight:700;background:#f0f7f0">
+                              <td>К оплате</td>
+                              <td style="text-align:right;white-space:nowrap"><%= order.total.clientTotal %> ₽</td></tr>
+                      </tbody>
+                  </table>
+                  <% } %>
+
+                  <% if (showTechPrices) { %>
+                  <div style="margin-top:10px;font-weight:600;text-align:right">
+                      Себестоимость работ: <%= order.total.tech %> ₽
+                      <% if (order.total.missingTech) { %>
+                          <span class="muted">+ <%= order.total.missingTech %> поз. без себестоимости</span>
+                      <% } %>
+                  </div>
+                  <% } %>
+
+                  <% if (showClientPrices && order.total.missingClient) { %>
+                  <div class="hint" style="text-align:right">
+                      <%= order.total.missingClient %> поз. без цены в прайсе — итог посчитан без них
+                  </div>
+                  <% } %>
+                <% } %>
+            </div>
+        </div>
+
         <div class="card">
             <h2>Материалы</h2>
             <div class="body">
@@ -201,6 +325,76 @@
                     <button class="btn btn-primary" type="submit">Добавить</button>
                 </form>
                 <% } %>
+            </div>
+        </div>
+
+        <div class="card" id="chat">
+            <h2>Переписка</h2>
+            <div class="body">
+                <% if (notice) { %><div class="flash ok"><%= notice %></div><% } %>
+                <% if (error) { %><div class="flash err"><%= error %></div><% } %>
+
+                <% if (!messages.length) { %>
+                    <p class="muted">Переписки пока нет. Опишите случай или спорный момент —
+                       дальше обсуждение пойдёт здесь же, при наряде.</p>
+                <% } else { %>
+                    <div class="chat">
+                        <% messages.forEach(function (m) { %>
+                            <div class="msg<%= (m.author_name === currentUser) ? ' mine' : '' %>">
+                                <div class="msg-head">
+                                    <span class="msg-author"><%= m.author_name || '—' %></span>
+                                    <span class="muted"><%= (m.created_at || '').slice(5, 16) %></span>
+                                </div>
+                                <div class="msg-body"><%= m.body %></div>
+                                <% if (m.proposal_codes) { %>
+                                    <div class="msg-proposal">
+                                        Согласовано:
+                                        <% m.proposal_codes.split(',').forEach(function (code) { %>
+                                            <span class="chip"><%= code %></span>
+                                        <% }) %>
+                                    </div>
+                                    <% if (!m.applied_at) { %>
+                                        <form method="post" action="/orders/<%= order.id %>/messages/<%= m.id %>/apply"
+                                              onsubmit="return confirm('Добавить согласованные позиции в наряд?')">
+                                            <button class="btn btn-sm btn-primary" type="submit">Заполнить наряд</button>
+                                        </form>
+                                    <% } else { %>
+                                        <div class="muted small">Уже в наряде</div>
+                                    <% } %>
+                                <% } %>
+                            </div>
+                        <% }) %>
+                    </div>
+                <% } %>
+
+                <form method="post" action="/orders/<%= order.id %>/messages" class="chat-form">
+                    <div>
+                        <label for="chat-body">Сообщение</label>
+                        <textarea id="chat-body" name="body" rows="3" maxlength="4000"
+                                  placeholder="Что нужно изготовить, какие сроки, спорный момент"></textarea>
+                    </div>
+                    <div>
+                        <label for="chat-codes">Договорённость по конструкциям <span class="muted">(можно выбрать несколько)</span></label>
+                        <% if (chatCatalog.length) { %>
+                            <select id="chat-codes" name="codes" multiple size="6">
+                                <% chatCatalog.forEach(function (g) { %>
+                                    <optgroup label="<%= g.title %>">
+                                        <% g.sections.forEach(function (sec) { %>
+                                            <% sec.items.forEach(function (it) { %>
+                                                <option value="<%= it.code %>"><%= it.code %> — <%= it.title %></option>
+                                            <% }) %>
+                                        <% }) %>
+                                    </optgroup>
+                                <% }) %>
+                            </select>
+                            <div class="hint">Отмеченные позиции добавятся по кнопке «Заполнить наряд»
+                                в том сообщении, где вы их отметили. Цены подставит лаборатория.</div>
+                        <% } else { %>
+                            <p class="muted">Справочник пуст — заведите позиции в админке.</p>
+                        <% } %>
+                    </div>
+                    <button class="btn btn-primary" type="submit">Отправить</button>
+                </form>
             </div>
         </div>
 

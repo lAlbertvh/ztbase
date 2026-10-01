@@ -1,0 +1,43 @@
+<%
+/*
+ * Общая навигация по разделам. Подключается на всех экранах через
+ * include 'partials/nav' с параметрами active, inline, currentUser,
+ * isDentist.
+ *
+ * Раньше навигация жила в шапке каждого экрана и отличалась от экрана к
+ * экрану: на карточке наряда вообще не было ссылки ни на обмен файлами,
+ * ни на титановые основания. Теперь разделы одинаковые везде и крупные.
+ */
+const items = [
+  { key: 'orders', href: '/orders',        ico: '📋', t: 'Заказ-наряды',   d: 'Список и создание', accent: 'orders' },
+  { key: 'files',  href: '/',              ico: '📁', t: 'Обмен файлами',  d: 'STL, сканы, фото',   accent: 'files'  },
+];
+if (!isDentist) {
+  items.push({ key: 'titan', href: '/titan', ico: '🔩', t: 'Титановые основания', d: 'Учёт и печать', accent: 'titan' });
+}
+// Плишка настроек приложения — только у администратора лаборатории.
+// Технику разделы со справочниками и ценами недоступны, поэтому
+// показывать ему ссылку означало бы просто уводить в 403.
+// Настройки сайта (лендинга) здесь намеренно не упомянуты: у них
+// отдельная админка с собственным паролем.
+if (isAdmin) {
+  items.push({ key: 'admin', href: '/admin', ico: '⚙️', t: 'Настройки приложения', d: 'Справочники и сотрудники', accent: 'admin' });
+}
+%>
+<nav class="nav-tiles<%= inline ? ' nav-tiles-inline' : '' %>">
+  <% items.forEach(function (i) { %>
+    <a class="nav-tile<%= active === i.key ? ' is-active' : '' %>"
+       data-accent="<%= i.accent %>" href="<%= i.href %>">
+      <span class="ico" aria-hidden="true"><%= i.ico %></span>
+      <span class="t"><%= i.t %></span>
+      <span class="d"><%= i.d %></span>
+    </a>
+  <% }); %>
+  <% if (!isDentist) { %>
+    <a class="nav-tile" data-accent="new" href="/orders/new">
+      <span class="ico" aria-hidden="true">✚</span>
+      <span class="t">Новый наряд</span>
+      <span class="d">Создать заказ-наряд</span>
+    </a>
+  <% } %>
+</nav>

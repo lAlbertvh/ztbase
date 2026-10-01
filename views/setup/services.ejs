@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Услуги — ZT Lab</title>
+<link rel="stylesheet" href="/css/setup.css">
+</head>
+<body>
+<header>
+  <div class="brand">ZT Lab</div>
+  <div class="sub">Шаг 3 из 4 — какие услуги вы осуществляете</div>
+</header>
+<main>
+  <div class="steps">
+    <div class="s on"></div><div class="s on"></div><div class="s on"></div>
+    <div class="s"></div><div class="s"></div>
+  </div>
+
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <div class="card">
+    <h2>Скажите, какие услуги вы осуществляете</h2>
+      <p>Впишите, что вы делаете, и по какой цене платит клиника. Эти позиции
+         сразу появятся в нарядах: и вы, и врач смогут выбирать их при
+         оформлении заказа.</p>
+      <div class="hint">
+        Цена нужна, чтобы считать сумму заказа. Если цена пока неизвестна —
+        оставьте поле пустым, сумма посчитается как «цена не загружена».
+      </div>
+  </div>
+
+  <div class="card">
+    <h2>Виды работ и конструкций</h2>
+    <form method="post" action="/setup/services/construction" class="row-form">
+      <div style="flex:3 1 260px">
+        <label for="s-title">Что изготавливаете</label>
+        <input type="text" id="s-title" name="title" maxlength="200"
+               placeholder="Коронка цирконовая" autocomplete="off">
+      </div>
+        <div class="narrow">
+          <label for="s-price">Цена для врача, ₽</label>
+          <input type="text" id="s-price" name="price" inputmode="decimal" placeholder="1200">
+        </div>
+        <div class="narrow">
+          <label for="s-price-tech">Себестоимость, ₽</label>
+          <input type="text" id="s-price-tech" name="price_tech" inputmode="decimal" placeholder="600">
+        </div>
+        <div style="flex:0 0 auto">
+          <button class="btn btn-primary" type="submit">+ Работа</button>
+        </div>
+      </form>
+      <div class="hint">Две цены: первую платит клиника, вторая — во сколько обходится
+        ваша работа. Они не связаны: скидка клиенте уменьшает первую и не трогает вторую.
+        Если себестоимость пока неизвестна — оставьте поле пустым.</div>
+      <div class="hint">Позиции попадут в группу «Свои услуги». Перенести их в профильные
+        группы можно потом в справочнике конструкций.</div>
+  </div>
+
+  <div class="card">
+    <h2>Материалы</h2>
+    <p>Производителей много, поэтому поле всегда остаётся свободным: в наряде
+       можно вписать любой материал, даже если его нет в списке. Здесь — то, чем
+       пользуетесь чаще всего.</p>
+    <form method="post" action="/setup/services/material" class="row-form">
+      <div style="flex:2 1 200px">
+        <label for="m-name">Материал</label>
+        <input type="text" id="m-name" name="name" maxlength="120"
+               placeholder="Циркон, диск Zirkonzahn" autocomplete="off">
+      </div>
+      <div style="flex:1 1 140px">
+        <label for="m-cat">Категория</label>
+        <input type="text" id="m-cat" name="category" maxlength="60" placeholder="керамика">
+      </div>
+      <div class="narrow">
+        <label for="m-unit">Ед.</label>
+        <input type="text" id="m-unit" name="unit" maxlength="20" value="шт">
+      </div>
+      <div style="flex:0 0 auto">
+        <button class="btn btn-primary" type="submit">+ Материал</button>
+      </div>
+    </form>
+
+    <% if (materials.length) { %>
+      <table style="margin-top:12px">
+        <thead><tr><th>Материал</th><th>Категория</th><th>Ед.</th><th></th></tr></thead>
+        <tbody>
+        <% materials.forEach(function (m) { %>
+          <tr>
+            <td><%= m.name %></td>
+            <td class="muted"><%= m.category || '' %></td>
+            <td class="muted"><%= m.unit %></td>
+            <td style="width:40px;text-align:right">
+              <form method="post" action="/setup/services/materials/<%= m.id %>/delete">
+                <button class="btn btn-sm" type="submit" title="Убрать">✕</button>
+              </form>
+            </td>
+          </tr>
+        <% }); %>
+        </tbody>
+      </table>
+    <% } else { %>
+      <div class="empty">Список пуст — это не мешает работать.</div>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <h2>Цвета</h2>
+    <p>Какие цвета вы предлагаете клиентам. Список потом можно расширить.</p>
+    <form method="post" action="/setup/services/colors">
+      <div class="field">
+        <label for="colors">Цвета через запятую</label>
+        <input type="text" id="colors" name="colors" style="max-width:520px"
+               value="<%= colors.join(', ') %>" placeholder="A1, A2, A3, A3.5, C2">
+      </div>
+      <button class="btn btn-primary" type="submit">Сохранить и дальше</button>
+    </form>
+  </div>
+
+  <div class="actions">
+    <a class="btn" href="/setup/clinics">Назад</a>
+    <a class="btn" href="/setup/staff">Дальше без сохранения цветов</a>
+  </div>
+</main>
+</body>
+</html>

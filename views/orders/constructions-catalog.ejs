@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f59e0b">
+    <title>Справочник конструкций</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        /* Таблица-редактор: колонка = группа верхнего уровня, ячейка =
+           конструкции этой группы. Именно так справочник просил видеть
+           пользователь, и заодно видно, какая группа пустая. */
+        .tree { display: flex; gap: 12px; align-items: flex-start; overflow-x: auto; padding-bottom: 8px; }
+        .col { flex: 1 0 300px; min-width: 300px; max-width: 520px; background: #fff;
+               border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; }
+        .col > header { padding: 10px 12px; border-bottom: 1px solid var(--line);
+                        background: #fafafa; border-radius: 10px 10px 0 0; }
+        .col > header h2 { font-size: 14px; margin: 0 0 2px; }
+        .col > header .count { font-size: 12px; color: var(--ink-3); }
+        .items { max-height: 62vh; overflow-y: auto; }
+        .sect { padding: 6px 12px 2px; font-size: 11px; text-transform: uppercase;
+                letter-spacing: .04em; color: var(--ink-3); background: #fcfcfc;
+                border-top: 1px solid var(--line); position: sticky; top: 0; }
+        .row { padding: 7px 12px; border-bottom: 1px solid var(--line); }
+        .row.off { opacity: .5; }
+        .row .code { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--ink-3); }
+        .row .title { font-size: 13px; margin: 1px 0 4px; line-height: 1.3; }
+        .row form { display: flex; gap: 4px; flex-wrap: wrap; }
+        .row input, .row select { padding: 4px 6px; font-size: 12px; }
+        .row input.w-title { flex: 1 1 140px; }
+        .row input.w-price { flex: 0 0 88px; }
+        .row input.w-term  { flex: 0 0 74px; }
+        .row .acts { display: flex; gap: 4px; margin-top: 4px; }
+        .addrow { padding: 9px 12px; background: #fafafa; border-radius: 0 0 10px 10px; }
+        .addrow form { display: flex; gap: 4px; flex-wrap: wrap; }
+        .addrow input { flex: 1 1 120px; padding: 4px 6px; font-size: 12px; }
+        .addrow input.w-price { flex: 0 0 82px; }
+        .empty { padding: 16px 12px; color: var(--ink-3); font-size: 12px; text-align: center; }
+        .warn { border-color: var(--danger); }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <h1>Справочник конструкций</h1>
+        <a class="btn btn-sm" href="/orders">К нарядам</a>
+        <span class="who"><%= currentUser %> · <a href="/logout">выход</a></span>
+    </header>
+
+    <main>
+    <%- include('../partials/nav', { active: 'orders', inline: true, currentUser, isDentist: false }) %>
+
+    <% if (error) { %>
+        <div class="card" style="border-color:var(--danger);margin-bottom:14px"><%= error %></div>
+    <% } %>
+
+    <div class="card" style="margin-bottom:14px">
+        <p class="muted" style="margin:0">
+            Колонки — группы, строки — конструкции. Врач и техник выбирают
+            конструкцию из этого справочника при заполнении наряда.
+              Две цены: <strong>цена для врача</strong> — то, что платит
+              клиника, и <strong>себестоимость</strong> — во сколько обходится
+              работа лаборатории. Они не связаны: скидка клинике уменьшает
+              первую и не трогает вторую.
+              <strong>Пустая цена</strong> — позиция есть, но цена ещё не
+              задана: в наряде она покажется без суммы, а итог посчитается
+              без неё.
+        </p>
+    </div>
+
+    <div class="tree">
+    <% groups.forEach(function (g) { %>
+        <div class="col">
+            <header>
+                <h2><%= g.title %></h2>
+                <span class="count"><%= g.items.length %> позиций · <code><%= g.code %></code></span>
+            </header>
+
+            <% if (!g.sections.length) { %>
+                <div class="empty">Позиций нет.<br>В этой группе ничего не заведено.</div>
+            <% } %>
+
+            <div class="items">
+            <% g.sections.forEach(function (s) { %>
+                <div class="sect"><%= s.title %></div>
+                <% s.items.forEach(function (c) { %>
+                <div class="row <%= c.active ? '' : 'off' %>">
+                    <div class="code"><%= c.code %><%= c.term ? ' · срок ' + c.term : '' %></div>
+                    <div class="title"><%= c.title %></div>
+                    <form method="post" action="/orders/catalog/constructions/<%= c.id %>">
+                        <input class="w-title" name="title" value="<%= c.title %>" maxlength="300" required>
+                          <input class="w-price" name="price" type="number" min="0" step="0.01"
+                                 value="<%= c.price === null ? '' : c.price %>" placeholder="цена для врача">
+                          <input class="w-price" name="price_tech" type="number" min="0" step="0.01"
+                                 value="<%= c.price_tech === null || c.price_tech === undefined ? '' : c.price_tech %>" placeholder="себестоимость">
+                          <input class="w-term" name="term" value="<%= c.term || '' %>" placeholder="срок">
+                        <input type="hidden" name="active" value="<%= c.active %>">
+                        <button class="btn btn-sm" type="submit">Сохранить</button>
+                    </form>
+                    <div class="acts">
+                        <form method="post" action="/orders/catalog/constructions/<%= c.id %>/toggle">
+                            <button class="btn btn-sm" type="submit"><%= c.active ? 'Выключить' : 'Включить' %></button>
+                        </form>
+                    </div>
+                </div>
+                <% }); %>
+            <% }); %>
+            </div>
+
+            <div class="addrow">
+                <form method="post" action="/orders/catalog/constructions">
+                    <input type="hidden" name="group_id" value="<%= g.id %>">
+                    <input type="hidden" name="section" value="">
+                    <input name="code" placeholder="Код" required maxlength="24" style="flex:0 0 88px">
+                    <input name="title" placeholder="Название конструкции" required maxlength="300">
+                      <input class="w-price" name="price" type="number" min="0" step="0.01" placeholder="цена для врача">
+                      <input class="w-price" name="price_tech" type="number" min="0" step="0.01" placeholder="себестоимость">
+                      <button class="btn btn-sm btn-primary" type="submit">+</button>
+                </form>
+            </div>
+        </div>
+    <% }); %>
+    </div>
+    </main>
+</body>
+</html>

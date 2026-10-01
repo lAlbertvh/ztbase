@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <link rel="icon" href="/icons/icon-192.png">
     <title>Учёт титановых оснований</title>
+    <link rel="stylesheet" href="/css/app.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -238,11 +239,16 @@
             <!-- ИСПРАВЛЕННАЯ ССЫЛКА EXCEL -->
             <a href="/titan/export?order_number=<%= encodeURIComponent(filters.order_number || '') %>&status=<%= encodeURIComponent(filters.status && filters.status !== 'all' ? filters.status : '') %>&date_from=<%= encodeURIComponent(filters.date_from || '') %>&date_to=<%= encodeURIComponent(filters.date_to || '') %>" class="btn btn-green">📊 Excel</a>
             <a href="/titan/print" target="_blank" class="btn btn-print">🖨️ Печать всех</a>
-            <a href="/" class="btn btn-orange">📁 Файлы</a>
             <a href="/add-user" class="btn">➕ Пользователя</a>
             <a href="/logout" class="btn logout">Выйти</a>
         </div>
     </div>
+
+    <div class="page">
+    <%# Плитки разделов: раньше отсюда можно было уйти только в обмен
+        файлами через маленькую кнопку в шапке, а заказ-нарядов и нового
+        наряда не было видно вовсе. %>
+    <%- include('partials/nav', { active: 'titan', inline: false, currentUser, isAdmin: true, isDentist: false }) %>
 
     <!-- Форма добавления с динамическими полями -->
     <div class="upload-form">
@@ -391,6 +397,7 @@
             <% } %>
         </tbody>
     </table>
+    </div><!-- /.page -->
 
     <script>
         // Сворачивание по месяцам и дням

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Содержимое сайта — ZT Lab</title>
+<style>
+  :root { --line:#e2e5ea; --muted:#6b7280; --bg:#f6f7f9; --accent:#1c64f2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+         background:var(--bg); color:#1a1d21; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 20px;
+           display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  header .spacer { flex:1; }
+  .bar { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 14px;
+         font-size:13px; color:var(--muted); }
+  main { max-width:980px; margin:0 auto; padding:20px; }
+  fieldset { background:#fff; border:1px solid var(--line); border-radius:10px;
+             margin:0 0 18px; padding:16px 18px; }
+  legend { font-weight:600; padding:0 6px; font-size:15px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:12px 0 4px; }
+  input[type=text], input[type=url], textarea, input[type=number] {
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    font:inherit; background:#fff; }
+  textarea { min-height:72px; resize:vertical; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+  .row { border:1px dashed var(--line); border-radius:8px; padding:10px 12px; margin-bottom:10px;
+         background:#fbfcfd; }
+  .row-head { font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .hint { font-size:12px; color:var(--muted); margin:4px 0 0; }
+  .note { font-size:13px; color:var(--muted); background:#fff; border:1px solid var(--line);
+          border-left:3px solid #7c3aed; border-radius:8px; padding:12px 14px; margin:0 0 18px; }
+  .btns { position:sticky; bottom:0; background:#fff; border-top:1px solid var(--line);
+          padding:14px 20px; display:flex; gap:10px; align-items:center; }
+  button, .btn { font:inherit; padding:9px 16px; border-radius:6px; border:1px solid var(--line);
+                 background:#fff; cursor:pointer; text-decoration:none; color:#1a1d21; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:#b42318; }
+  .ok { background:#e8f5ec; border:1px solid #b7dfc6; color:#1a6b3c; padding:10px 14px;
+        border-radius:8px; margin-bottom:16px; }
+  .err { background:#fdecea; border:1px solid #f2b8b5; color:#b42318; padding:10px 14px;
+         border-radius:8px; margin-bottom:16px; }
+  .thumb { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .thumb img { max-height:70px; border:1px solid var(--line); border-radius:6px; background:#fff; padding:4px; }
+  code { background:#eef0f3; padding:1px 5px; border-radius:4px; font-size:12px; }
+  @media (max-width:640px) { .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Настройки сайта</h1>
+  <div class="bar">Файл: <code><%= contentFile %></code></div>
+  <div class="bar">Публикация: <strong><%= published %></strong></div>
+  <div class="spacer"></div>
+  <a class="btn" href="/" target="_blank">Открыть лендинг</a>
+</header>
+
+<main>
+
+<div class="note">
+  Это админка сайта, а не приложения. Здесь — только публичные тексты и картинки
+  ztbase.ru. Настройки рабочего приложения (справочники, ставки, сотрудники, заказы)
+  живут в другом месте: <a href="/admin">настройки приложения</a>.
+</div>
+
+<% if (saved) { %><div class="ok">Сохранено. Чтобы изменения появились на сайте, выполните на сервере: <code>bash deploy-landing.sh</code></div><% } %>
+<% if (error) { %><div class="err"><%= error %></div><% } %>
+
+<form method="post" action="/admin/content">
+
+  <fieldset>
+    <legend>Контакты</legend>
+    <div class="grid">
+      <div>
+        <label>Телефон</label>
+        <input type="text" name="contacts[phone]" value="<%= content.contacts.phone %>">
+      </div>
+      <div>
+        <label>Почта</label>
+        <input type="text" name="contacts[email]" value="<%= content.contacts.email %>">
+      </div>
+      <div>
+        <label>Мессенджеры</label>
+        <input type="text" name="contacts[messengers]" value="<%= content.contacts.messengers %>">
+      </div>
+      <div>
+        <label>Город / адрес</label>
+        <input type="text" name="contacts[address]" value="<%= content.contacts.address %>">
+      </div>
+      <div>
+        <label>Часы работы</label>
+        <input type="text" name="contacts[workHours]" value="<%= content.contacts.workHours %>">
+      </div>
+    </div>
+    <p class="hint">Эти значения подставляются в лендинг, в подвал и в письма. Заглушки вида «+7 000 000-00-00» нужно заменить на настоящие — иначе посетитель увидит нерабочий телефон.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Первый экран</legend>
+    <label>Заголовок</label>
+    <input type="text" name="hero[title]" value="<%= content.hero.title %>">
+    <label>Подзаголовок</label>
+    <textarea name="hero[subtitle]"><%= content.hero.subtitle %></textarea>
+    <label>Надпись на кнопке</label>
+    <input type="text" name="hero[ctaText]" value="<%= content.hero.ctaText %>">
+  </fieldset>
+
+  <fieldset>
+    <legend>Услуги</legend>
+    <% content.services.forEach(function(s, i) { %>
+      <div class="row">
+        <div class="row-head">Услуга <%= i + 1 %></div>
+        <label>Название</label>
+        <input type="text" name="services[<%= i %>][title]" value="<%= s.title || '' %>">
+        <label>Описание</label>
+        <input type="text" name="services[<%= i %>][text]" value="<%= s.text || '' %>">
+      </div>
+    <% }); %>
+    <p class="hint">Строку с пустым названием и описанием сайт пропустит. Последняя карточка всегда остаётся, чтобы блок не схлопнулся.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Этапы работы</legend>
+    <% content.steps.forEach(function(s, i) { %>
+      <div class="row">
+        <div class="row-head">Шаг <%= i + 1 %></div>
+        <label>Название</label>
+        <input type="text" name="steps[<%= i %>][title]" value="<%= s.title || '' %>">
+        <label>Описание</label>
+        <input type="text" name="steps[<%= i %>][text]" value="<%= s.text || '' %>">
+      </div>
+    <% }); %>
+  </fieldset>
+
+  <fieldset>
+    <legend>Почему выбирают нас</legend>
+    <% content.advantages.forEach(function(s, i) { %>
+      <div class="row">
+        <div class="row-head">Пункт <%= i + 1 %></div>
+        <label>Название</label>
+        <input type="text" name="advantages[<%= i %>][title]" value="<%= s.title || '' %>">
+        <label>Описание</label>
+        <input type="text" name="advantages[<%= i %>][text]" value="<%= s.text || '' %>">
+      </div>
+    <% }); %>
+  </fieldset>
+
+  <fieldset>
+    <legend>Тарифы</legend>
+    <% content.tariffs.forEach(function(s, i) { %>
+      <div class="row">
+        <div class="row-head">Тариф <%= i + 1 %></div>
+        <label>Название</label>
+        <input type="text" name="tariffs[<%= i %>][title]" value="<%= s.title || '' %>">
+        <label>Цена</label>
+        <input type="text" name="tariffs[<%= i %>][price]" value="<%= s.price || '' %>" placeholder="уточняется">
+        <label>Описание</label>
+        <input type="text" name="tariffs[<%= i %>][text]" value="<%= s.text || '' %>">
+      </div>
+    <% }); %>
+    <p class="hint">Цена — обычный текст. Впишите «уточняется» или «по запросу», если конкретную сумму называть не хотите.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Картинки</legend>
+    <p class="hint">Каждая картинка загружается отдельной кнопкой. После загрузки ссылка подставится в поле сама.</p>
+    <% [['logo','Логотип'],['hero','Картинка на первом экране'],['ogImage','Картинка для соцсетей (og:image)']].forEach(function(pair) { %>
+      <div class="row">
+        <div class="row-head"><%= pair[1] %></div>
+        <div class="thumb">
+          <% if (content.images[pair[0]]) { %>
+            <img src="<%= content.images[pair[0]] %>" alt="">
+          <% } %>
+          <div style="flex:1; min-width:220px">
+            <input type="text" name="images[<%= pair[0] %>]" value="<%= content.images[pair[0]] || '' %>" readonly>
+          </div>
+        </div>
+        <label style="margin-top:8px">Заменить</label>
+        <input type="file" name="image" accept="image/*" form="upload-<%= pair[0] %>">
+      </div>
+    <% }); %>
+  </fieldset>
+
+  <fieldset>
+    <legend>Реквизиты</legend>
+    <div class="grid">
+      <div>
+        <label>Название организации</label>
+        <input type="text" name="legal[companyName]" value="<%= content.legal.companyName %>">
+      </div>
+      <div>
+        <label>ИНН</label>
+        <input type="text" name="legal[inn]" value="<%= content.legal.inn %>">
+      </div>
+      <div>
+        <label>ОГРН</label>
+        <input type="text" name="legal[ogrn]" value="<%= content.legal.ogrn %>">
+      </div>
+      <div>
+        <label>ОГРНИП (для ИП)</label>
+        <input type="text" name="legal[ogrnip]" value="<%= content.legal.ogrnip %>">
+      </div>
+    </div>
+    <label>Юридический адрес</label>
+    <input type="text" name="legal[legalAddress]" value="<%= content.legal.legalAddress %>">
+    <p class="hint">Реквизиты попадают в политику и оферту. Пустые поля клиенту не показываем.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Настройки сайта</legend>
+    <label>Заголовок вкладки браузера</label>
+    <input type="text" name="site[title]" value="<%= content.site.title %>">
+    <label>Описание для поисковиков</label>
+    <textarea name="site[description]"><%= content.site.description %></textarea>
+    <label>Ключевые слова</label>
+    <input type="text" name="site[keywords]" value="<%= content.site.keywords %>">
+  </fieldset>
+
+</form>
+
+<div style="height:80px"></div>
+
+</main>
+
+<div class="btns">
+  <button class="primary" onclick="document.querySelector('form').submit()">Сохранить</button>
+  <span class="hint">Сохранение не публикует сайт автоматически — после этого нужен <code>bash deploy-landing.sh</code></span>
+  <div class="spacer" style="flex:1"></div>
+  <form method="post" action="/admin/content/reset" style="display:inline"
+        onsubmit="return confirm('Сбросить всё содержимое к значениям по умолчанию? Загруженные тексты будут потеряны.')">
+    <button class="danger" type="submit">Сбросить к умолчаниям</button>
+  </form>
+</div>
+
+<% [['logo'],['hero'],['ogImage']].forEach(function(pair) { %>
+<form id="upload-<%= pair[0] %>" method="post" action="/admin/content/upload" enctype="multipart/form-data" hidden>
+  <input type="hidden" name="slot" value="<%= pair[0] %>">
+</form>
+<% }); %>
+
+<script>
+  // Файл выбирается в основной форме, но отправляется в свою: у формы
+  // загрузки отдельный action, иначе картинка уехала бы вместе с текстом.
+  document.querySelectorAll('input[type=file][form]').forEach(function(input) {
+    input.addEventListener('change', function() {
+      if (input.files && input.files.length) {
+        input.form.submit();
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

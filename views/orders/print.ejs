@@ -20,9 +20,14 @@
                       margin: 0.4mm 1mm 0.4mm 0; font-size: 9pt; }
         .sign { display: flex; gap: 6mm; margin-top: 8mm; font-size: 10pt; }
         .sign div { flex: 1; border-top: 1px solid #000; padding-top: 1.5mm; }
-        .no-print { margin-bottom: 4mm; }
-        .no-print button { padding: 6px 14px; font-size: 13px; cursor: pointer;
-                           border: 1px solid #888; background: #f4f4f4; border-radius: 4px; }
+          .no-print { margin-bottom: 4mm; }
+          .no-print button { padding: 6px 14px; font-size: 13px; cursor: pointer;
+                             border: 1px solid #888; background: #f4f4f4; border-radius: 4px; }
+          .qr-print { display: flex; gap: 4mm; align-items: center;
+                      border: 1px solid #000; padding: 2mm; margin-bottom: 4mm; }
+          .qr-print img { flex: 0 0 auto; }
+          .qr-print div { font-size: 10pt; }
+
         @media print {
             .no-print { display: none; }
             body { padding: 0; }
@@ -38,6 +43,16 @@
 
     <h1>ЗАКАЗ-НАРЯД № <%= order.order_number %></h1>
     <div class="sub">ZT Lab · сформирован <%= new Date().toLocaleString('ru-RU') %></div>
+
+    <%# QR печатается на бланке: техник отсканирует камерой телефона
+        и отметит выполненные манипуляции, не заходя за компьютер. %>
+    <div class="qr-print">
+        <img src="/orders/<%= order.id %>/qr.svg" alt="QR наряда" width="120" height="120">
+        <div>
+            <b>Отметить манипуляции</b><br>
+            Наведите камеру телефона на код слева.
+        </div>
+    </div>
 
     <table class="kv">
         <tr>

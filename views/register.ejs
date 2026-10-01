@@ -19,12 +19,31 @@
         .muted { color: #777; font-size: 13px; text-align: center; margin-top: 18px; }
         .muted a { color: #4CAF50; }
         label { font-size: 13px; color: #555; display: block; margin-bottom: 2px; }
+        /* Предупреждение о пробном периоде — заметное, но не тревожное:
+           человек должен увидеть срок до регистрации, а не после. */
+        .trial {
+            background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px;
+            padding: 12px 14px; margin: 14px 0; font-size: 14px; color: #7c2d12;
+        }
+        .trial b { color: #9a3412; }
+        .trial ul { margin: 8px 0 0; padding-left: 20px; }
+        .consent { font-size: 13px; color: #555; margin: 4px 0 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Регистрация лаборатории</h1>
         <p class="hint">Данные каждой лаборатории изолированы и никому не видны.</p>
+
+        <div class="trial">
+            <b>Бесплатный пробный период — <%= TRIAL_DAYS %> дней.</b>
+            <ul>
+                <li>Все функции открыты, включая переписку и прайс-лист.</li>
+                <li>Через <%= TRIAL_DAYS %> дней работа прекращается до оплаты.</li>
+                <li>Наряды и файлы сохраняются и вернутся после оплаты.</li>
+            </ul>
+        </div>
+
         <form method="post" action="/register-lab">
             <label for="lab_name">Название лаборатории</label>
             <input type="text" id="lab_name" name="lab_name" required placeholder="Зуботехническая лаборатория">
@@ -35,10 +54,24 @@
             <label for="username">Ваше имя</label>
             <input type="text" id="username" name="username" required autocomplete="username">
 
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="ivanova@mail.ru">
+            <p class="hint">На него придёт напоминание об окончании пробного периода.</p>
+
+            <label for="phone">Телефон <span style="color:#999">(необязательно)</span></label>
+            <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="+7 900 000-00-00">
+
             <label for="password">Пароль (не короче 6 символов)</label>
             <input type="password" id="password" name="password" required minlength="6" autocomplete="new-password">
 
-            <button type="submit">Создать лабораторию</button>
+            <p class="consent">
+                Регистрируясь, вы соглашаетесь с
+                <a href="/legal/privacy" target="_blank" rel="noopener">политикой обработки персональных данных</a>
+                и <a href="/legal/offer" target="_blank" rel="noopener">условиями использования</a>.
+                E-mail и телефон нужны только для связи по оплате и окончанию пробного периода.
+            </p>
+
+            <button type="submit">Начать бесплатный период</button>
         </form>
         <div class="muted">Уже есть доступ? <a href="/login">Войти</a></div>
     </div>

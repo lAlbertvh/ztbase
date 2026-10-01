@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Клиники — ZT Lab</title>
+<link rel="stylesheet" href="/css/setup.css">
+</head>
+<body>
+<header>
+  <div class="brand">ZT Lab</div>
+  <div class="sub">Шаг 2 из 4 — клиники и представители</div>
+</header>
+<main>
+  <div class="steps">
+    <div class="s on"></div><div class="s on"></div><div class="s"></div>
+    <div class="s"></div><div class="s"></div>
+  </div>
+
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <div class="card">
+    <h2>Кто заказывает ваши работы</h2>
+    <p>Добавьте клиники-партнёры и их представителей — врачей и администраторов,
+       с которыми вы работаете. В нарядах будет видно, от кого поступил заказ.</p>
+    <div class="hint">Можно пропустить и вернуться позже: клиники добавляются и из админки.</div>
+  </div>
+
+  <div class="card">
+    <h2>Стоматологии</h2>
+
+    <form method="post" action="/setup/clinics" class="row-form">
+      <div>
+        <label for="c-name">Название клиники</label>
+        <input type="text" id="c-name" name="name" maxlength="120" placeholder="Стоматология Денталь" autocomplete="off">
+      </div>
+      <div>
+        <label for="c-contact">Контакт <span class="muted">— необязательно</span></label>
+        <input type="text" id="c-contact" name="contact" maxlength="120" placeholder="телефон или почта">
+      </div>
+      <div style="flex:0 0 auto">
+        <button class="btn btn-primary" type="submit">+ Клиника</button>
+      </div>
+    </form>
+
+    <% if (!clinics.length) { %>
+      <div class="empty">Пока ни одной клиники не добавлено.</div>
+    <% } else { %>
+      <div style="margin-top:14px">
+        <% clinics.forEach(function (c) { %>
+          <div style="border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <strong><%= c.name %></strong>
+              <% if (c.contact) { %><span class="muted" style="font-size:13px"><%= c.contact %></span><% } %>
+              <span class="spacer" style="flex:1"></span>
+              <form method="post" action="/setup/clinics/<%= c.id %>/delete"
+                    onsubmit="return confirm('Удалить клинику «<%= c.name %>» вместе с представителями?')">
+                <button class="btn btn-sm" type="submit">Удалить клинику</button>
+              </form>
+            </div>
+
+            <% if (c.contacts.length) { %>
+              <table style="margin-top:8px">
+                <tbody>
+                <% c.contacts.forEach(function (p) { %>
+                    <tr>
+                      <td style="width:140px"><strong><%= p.name %></strong></td>
+                      <td style="width:140px"><span class="pill"><%= roles[p.role] || 'Другое' %></span></td>
+                      <td class="muted"><%= p.contact || '' %></td>
+                      <%# Учётная запись помечена явно: представитель без неё
+                          видит наряд только в списке лаборатории, заказать
+                          работу сам не может. %>
+                      <td style="width:150px">
+                        <% if (p.user_id) { %>
+                          <span class="pill ok">входит в систему</span>
+                        <% } else { %>
+                          <span class="pill">без доступа</span>
+                        <% } %>
+                      </td>
+                      <td style="width:40px;text-align:right">
+                        <form method="post" action="/setup/contacts/<%= p.id %>/delete"
+                              onsubmit="return confirm('Убрать представителя <%= p.name %>?')">
+                        <button class="btn btn-sm" type="submit" title="Убрать">✕</button>
+                      </form>
+                    </td>
+                  </tr>
+                <% }); %>
+                </tbody>
+              </table>
+            <% } else { %>
+              <div class="hint" style="margin-top:6px">Представителей пока нет.</div>
+            <% } %>
+
+              <form method="post" action="/setup/contacts" class="row-form" style="margin-top:10px">
+                <input type="hidden" name="clinic_id" value="<%= c.id %>">
+                <div>
+                  <label>Имя представителя</label>
+                  <input type="text" name="name" maxlength="60" placeholder="Анна" autocomplete="off">
+                </div>
+                <div>
+                  <label>Роль</label>
+                  <select name="role">
+                    <% Object.keys(roles).forEach(function (k) { %>
+                      <option value="<%= k %>"><%= roles[k] %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div>
+                  <label>Специализация <span class="muted">— врача</span></label>
+                  <select name="specialization">
+                    <option value="">— не указана —</option>
+                    <% (specializations.dentist || []).forEach(function (item) { %>
+                      <option value="<%= item[0] %>"><%= item[1] %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div>
+                  <label>Пароль для входа <span class="muted">— от 6 символов</span></label>
+                  <input type="password" name="password" minlength="6" autocomplete="new-password"
+                         placeholder="оставьте пустым, если доступа не нужно">
+                </div>
+                <div>
+                  <label>Контакт <span class="muted">— необязательно</span></label>
+                  <input type="text" name="contact" maxlength="120" placeholder="телефон">
+                </div>
+                <div style="flex:0 0 auto">
+                  <button class="btn" type="submit">+ Представитель</button>
+                </div>
+              </form>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+
+    <% if (hidden && hidden.length) { %>
+      <div class="card">
+        <h2>Отключённые клиники</h2>
+        <p>Клиники с нарядами или врачами не удаляются, а отключаются: их
+           история должна остаться. Клиника возвращается в работу одним нажатием.</p>
+        <table>
+          <thead><tr><th>Клиника</th><th style="width:140px"></th></tr></thead>
+          <tbody>
+          <% hidden.forEach(function (c) { %>
+            <tr>
+              <td><%= c.name %></td>
+              <td style="text-align:right">
+                <form method="post" action="/setup/clinics/<%= c.id %>/restore">
+                  <button class="btn btn-sm" type="submit">Вернуть в работу</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+
+    <div class="card">
+      <h2>Врачи без клиники</h2>
+      <p>Врач, у которого не выбрана клиника, видит только свои наряды —
+         наряды коллег из своей клиники ему не показываются. Выберите клинику,
+         чтобы он работал от её имени.</p>
+      <% if (!unattached.length) { %>
+        <div class="empty">Все врачи привязаны к клиникам.</div>
+      <% } else { %>
+        <table>
+          <thead><tr><th>Врач</th><th style="width:280px">Клиника</th></tr></thead>
+          <tbody>
+          <% unattached.forEach(function (u) { %>
+            <tr>
+              <td><strong><%= u.name %></strong></td>
+              <td>
+                <% clinics.forEach(function (c) { %>
+                  <form method="post" action="/setup/clinic/<%= c.id %>/link" style="display:inline">
+                    <input type="hidden" name="user_id" value="<%= u.id %>">
+                    <button class="btn btn-sm" type="submit"><%= c.name %></button>
+                  </form>
+                <% }) %>
+              </td>
+            </tr>
+          <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="/setup/services">Дальше — услуги и цены</a>
+      <a class="btn" href="/setup/about">Назад</a>
+    </div>
+</main>
+</body>
+</html>

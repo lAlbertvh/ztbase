@@ -9,7 +9,14 @@ const ExcelJS = require('exceljs');
 const { storage, uniqueName, BACKEND } = require('./src/services/storage');
 const SqliteStore = require('./src/services/session-store');
 const { migrateOrders } = require('./src/db/orders-schema');
+const { migrateManipulations } = require('./src/db/manipulations-schema');
+const { migrateConstructions } = require('./src/db/constructions-schema');
+const { migrateSetup, setupPending } = require('./src/db/setup-schema');
 const createOrderRoutes = require('./src/routes/orders');
+const createSetupRoutes = require('./src/routes/setup');
+  const license = require('./src/services/license');
+  const SPEC = require('./src/services/specializations');
+  const constructions = require('./src/services/constructions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -154,6 +161,12 @@ function initDb() {
   addColSafe('users', 'password_hash', 'TEXT');
   addColSafe('users', 'role', "TEXT DEFAULT 'tech'");
   addColSafe('users', 'active', 'BOOLEAN DEFAULT 1');
+  // Колонки объявляются до пересборки таблицы ниже: пересоздание копирует
+  // только перечисленные колонки, и всё, чего в списке нет, теряется.
+  // Специализацию и клинику объявляют и другие миграции — на чистой базе
+  // они идут позже, но к этому моменту колонки уже должны существовать.
+  addColSafe('users', 'specialization', 'TEXT');
+  addColSafe('users', 'clinic_id', 'INTEGER');
 
   // Имя сотрудника уникально только внутри своей лаборатории.
   // Раньше name был UNIQUE на уровне всей таблицы, из-за чего вторая
@@ -182,10 +195,12 @@ function initDb() {
         password_hash TEXT,
         role TEXT DEFAULT 'tech',
         active BOOLEAN DEFAULT 1,
+        specialization TEXT,
+        clinic_id INTEGER,
         UNIQUE (lab_id, name)
       );
-      INSERT INTO users_new (id, name, lab_id, password_hash, role, active)
-        SELECT id, name, lab_id, password_hash, role, active FROM users;
+      INSERT INTO users_new (id, name, lab_id, password_hash, role, active, specialization, clinic_id)
+        SELECT id, name, lab_id, password_hash, role, active, specialization, clinic_id FROM users;
       DROP TABLE users;
       ALTER TABLE users_new RENAME TO users;
     `);
@@ -198,6 +213,23 @@ function initDb() {
   // Миграции идемпотентны, поэтому вызов безопасен при каждом старте.
   migrateOrders(db);
   console.log('Схема заказ-нарядов готова');
+
+  // Манипуляции: справочник, чек-лист наряда и журнал для зарплаты.
+  // Вызывается после migrateOrders, потому что order_manipulations
+  // ссылается внешним ключом на таблицу orders.
+  migrateManipulations(db);
+  console.log('Схема манипуляций готова');
+
+  // Справочник конструкций: группы и позиции для выбора в наряде.
+  // Идемпотентен и не зависит от порядка: недостающие таблицы
+  // пропускает, а заполняется только при пустом справочнике.
+migrateConstructions(db);
+    console.log('Схема конструкций готова');
+
+    // Первичная настройка: мастер, клиники-партнёры и их представители.
+    // Идемпотентна, добавляет недостающие колонки в labs.
+    migrateSetup(db);
+    console.log('Схема настройки готова');
 
   const userCount = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (userCount === 0) {
@@ -348,7 +380,10 @@ app.set('views', viewsDir);
 // Причина: STL полной дуги весит 50-150 МБ, и держать их в памяти нельзя.
 // После загрузки storage.put() переносит файл в папку лаборатории
 // (или в облако, если STORAGE_BACKEND=s3).
-const tmpUploadDir = path.join(appRoot, 'tmp-uploads');
+// Папка для промежуточных файлов при загрузке. В системном сервисе
+// путь задаётся переменной: с ProtectSystem=strict писать внутрь
+// /opt нельзя, поэтому временные файлы живут рядом с базой.
+const tmpUploadDir = process.env.TMP_UPLOAD_DIR || path.join(appRoot, 'tmp-uploads');
 if (!fs.existsSync(tmpUploadDir)) {
   fs.mkdirSync(tmpUploadDir, { recursive: true });
   console.log('Создана временная папка для загрузок:', tmpUploadDir);
@@ -357,14 +392,35 @@ if (!fs.existsSync(tmpUploadDir)) {
 const multerStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const os = require('os');
-    cb(null, fs.mkdtempSync(path.join(os.tmpdir(), 'ztlab-')));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ztlab-'));
+    // Запоминаем папку на запросе: если multer отклонит загрузку по
+    // размеру, обработчик ошибок должен её убрать, а своего доступа
+    // к локальным переменным маршрута у него нет.
+    if (!req.ztlabTmpDirs) req.ztlabTmpDirs = new Set();
+    req.ztlabTmpDirs.add(dir);
+    cb(null, dir);
   },
   filename: (req, file, cb) => {
     const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf8');
     cb(null, uniqueName(decodedName));
   }
 });
-const upload = multer({ storage: multerStorage });
+// Предел на один файл. Без него любой вошедший сотрудник мог залить
+// на диск файл любого размера и забить ноутбук; файлы идут во временную
+// папку и удаляются только после успешной загрузки. 100 МБ — с запасом
+// для сканирования в высоком разрешении.
+const MAX_FILE_MB = Number(process.env.MAX_FILE_MB || 100);
+
+const upload = multer({
+  storage: multerStorage,
+  limits: {
+    fileSize: MAX_FILE_MB * 1024 * 1024,
+    // Страхует от запроса с тысячами мелких частей: количество полей
+    // в запросе не должно расти бесконтрольно.
+    fields: 50,
+    parts: 120,
+  },
+});
 
 // Защита от подбора пароля.
 //
@@ -420,18 +476,145 @@ app.get('/health', (req, res) => {
   res.status(dbOk ? 200 : 503).json(body);
 });
 
+let lastLeadAt = 0;
+
+// ------ Заявка с лендинга ------
+// Форма на ztbase.ru обещает, что заявки придут в мессенджер, поэтому
+// заявка уходит в Telegram: почта на домене не работает, а бот работает.
+app.post('/lead', (req, res) => {
+  // Медленная проверка: обычная отсекает ботов почти полностью, honeypot
+  // добивает тех, кто отправляет форму не из браузера.
+  const hp = (req.body && req.body.website) || '';
+  if (hp) return res.status(200).send('ok');
+
+  const now = Date.now();
+  if (now - (lastLeadAt || 0) < 2000) {
+    return res.status(429).send('Слишком часто. Подождите пару секунд и отправьте ещё раз.');
+  }
+  lastLeadAt = now;
+
+  const clean = (v, max) => String(v == null ? '' : v).trim().slice(0, max || 300);
+  const name = clean(req.body.name, 120);
+  const contact = clean(req.body.contact, 160);
+  const message = clean(req.body.message, 2000);
+
+  // Без контакта заявку некуда обработать: телефона и почты может не быть.
+  if (!name || !contact) {
+    return res.status(400).send('Укажите имя и способ связи');
+  }
+
+  const lines = [
+    'Новая заявка с сайта',
+    '',
+    `Имя: ${name}`,
+    `Связь: ${contact}`,
+  ];
+  if (message) lines.push('', `Сообщение: ${message}`);
+  const text = lines.join('\n');
+
+  const { send, configured } = require('./src/services/telegram');
+
+  // В отличие от уведомлений о нарядах, здесь ждать ответа Telegram нужно:
+  // посетителю нельзя показать «отправлено», если заявка никуда не ушла.
+  // Одна повторная попытка — маршрут до Telegram местами подвисает.
+  const deliver = async () => {
+    if (!configured) return { skipped: true };
+    let last = {};
+    for (let attempt = 0; attempt < 2; attempt++) {
+      last = await send(text, { timeoutMs: 10000 });
+      if (last.status === 200) return last;
+      await new Promise(r => setTimeout(r, 1200));
+    }
+    return last;
+  };
+
+  deliver().then(result => {
+    if (result.skipped) {
+      console.log('Заявка с сайта (Telegram не настроен):\n' + text);
+      return;
+    }
+    if (result.status === 200) return;
+
+    // Не полагаемся только на Telegram: каждая неотправленная заявка
+    // дописывается в файл, чтобы её можно было поднять вручную.
+    const stamp = new Date().toISOString();
+    try {
+      const fs = require('fs');
+      const dir = process.env.LEAD_LOG_DIR || '/var/lib/ztlab';
+      fs.appendFileSync(`${dir}/leads.log`,
+        `\n===== ${stamp} · не доставлено в Telegram (${result.error || result.status}) =====\n${text}\n`);
+    } catch (e) {
+      console.error('Не удалось записать заявку в leads.log:', e.message);
+    }
+    console.error('Заявка не доставлена в Telegram:', JSON.stringify(result));
+  });
+
+  res.status(200).send(
+    'Заявка принята. Мы свяжемся с вами в рабочее время. ' +
+    'Если не дождётесь звонка — напишите нам в Telegram или WhatsApp.'
+  );
+});
+
 // ------ Middleware авторизации ------
-const PUBLIC_PATHS = new Set(['/login', '/set-user', '/register', '/register-lab', '/health']);
+  const PUBLIC_PATHS = new Set([
+    '/login', '/set-user', '/register', '/register-lab', '/health', '/lead', '/logout',
+  ]);
+
+  // Экран продления и его форма должны работать без действующей подписки.
+  // Это не ослабление проверки: внутри /trial нет ни одного рабочего
+  // раздела, там только текст и заявка на продление. Держать их в общем
+  // списке необязательно — проверка пробного периода ниже специально
+  // пропускает этот префикс.
+  const TRIAL_PATHS = ['/trial'];
+
+// Редактор содержимого пропускается мимо общей проверки, иначе запрос
+// без сессии ушёл бы на /login и до маршрута не дошёл. Свою проверку
+// раздел всё равно делает: пароль, если он задан, и роль администратора.
+// /public и обе админки должны доходить до своих обработчиков без
+// сессии: там своя проверка — пароль администратора. Иначе глобальный
+// редирект на /login перехватывал бы запрос раньше Basic-аутентификации,
+// и вместо ответа 401 клиент получал бы 302 и не понимал, что нужен пароль.
+const PUBLIC_PREFIXES = ['/public', '/admin/content'];
 
 app.use((req, res, next) => {
-  if (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/public')) {
+  if (PUBLIC_PATHS.has(req.path) ||
+      PUBLIC_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
     return next();
   }
   if (!req.session.user) {
     return res.redirect('/login');
   }
-  next();
-});
+  // Роль и пользователь нужны каждому экрану, а не только главному:
+  // навигация решает по роли, какие плитки вообще показывать.
+  // Явные параметры res.render по-прежнему имеют приоритет.
+res.locals.currentUser = req.session.user;
+    res.locals.isAdmin = req.session.role === 'admin';
+    res.locals.isDentist = req.session.role === 'dentist';
+
+        // Пробный период закончился: весь функционал закрыт, лаборатория
+        // видит экран продления. Данные не удаляются — после оплаты всё
+        // вернётся как было.
+        //
+        // Проверка после проверки сессии: неавторизованный посетитель должен
+        // получить /login, а не экран оплаты чужой лаборатории.
+        if (!TRIAL_PATHS.some((prefix) => req.path.startsWith(prefix)) &&
+            TRIAL.trialExpired(db, req.session.labId)) {
+          return res.redirect('/trial');
+        }
+
+        // Незавершённая настройка: показываем мастер вместо рабочих
+        // экранов. Это только первый запуск лаборатории — после «пропустить»
+        // флаг снимается и мастер больше не появляется сам. Проверяем
+        // администратора, а не любого вошедшего: врачу мастер не нужен, и
+        // его не должно уводить с чужой настройки.
+      if (req.session.role === 'admin' &&
+        !req.path.startsWith('/setup') &&
+        req.path !== '/logout' &&
+        setupPending(db, req.session.labId)) {
+      return res.redirect('/setup');
+    }
+    next();
+  });
 
 // Только администратор лаборатории (удаление файлов, пользователи).
 function requireAdmin(req, res, next) {
@@ -445,6 +628,36 @@ function requireAdmin(req, res, next) {
 // Маршруты подключаются здесь, после requireAdmin: наряды нуждаются
 // в этой проверке прав и в переменной db.
 app.use('/orders', createOrderRoutes({ db, requireAdmin }));
+
+  // Мастер первичной настройки. Свой requireAdmin внутри: мастер
+  // доступен только тому, кто зарегистрировал лабораторию.
+  app.use('/setup', createSetupRoutes({ db, requireAdmin, hashPassword }));
+
+// ------ Коды приглашений ------
+// Регистрация лабораторий идёт только по коду: без этого любой из
+// интернета заводил себе лабораторию с администратором.
+const TRIAL = require('./src/services/trial');
+app.locals.TRIAL_DAYS = TRIAL.TRIAL_DAYS;
+
+// ------ Единая панель настроек ------
+// Сами разделы разъехались по разным адресам, а ссылок на них в меню
+// не было: найти их можно было, только зная адрес. Хаб ничего не
+// меняет — он даёт одну точку входа и виден только администратору.
+app.get('/admin', requireAdmin, (req, res) => {
+    // Счётчик мест нужен прямо на главной админки: человек должен
+    // видеть, сколько осталось, не заходя в форму добавления.
+    res.render('admin-home', {
+      usage: license.usage(db, req.session.labId || 1),
+      setupPendingHere: setupPending(db, req.session.labId || 1),
+    });
+  });
+
+// ------ Редактор содержимого сайта ------
+// Отдельный сервис на C++ для этого не делаем: авторизация, роли и
+// загрузка файлов в проекте уже есть, а новая админка — это несколько
+// маршрутов в том же приложении. Второй стек означал бы второе
+// развёртывание и вторую поверхность атаки ради правки текста.
+app.use('/admin/content', require('./src/routes/content-admin'));
 
 // ------ Маршруты ------
 
@@ -511,12 +724,16 @@ app.post('/set-user', async (req, res) => {
       return fail('Неверное имя, пароль или адрес лаборатории', 401);
     }
 
-    clearAttempts([ipKey, userKey]);
-    req.session.user = username;
-    req.session.labId = labId;
+clearAttempts([ipKey, userKey]);
+      req.session.user = username;
+      req.session.userId = user.id;
+      req.session.labId = labId;
     req.session.role = user.role;
     req.session.labSlug = slug;
-    res.redirect('/');
+    // После входа открываем список заказ-нарядов, а не обмен файлами:
+    // заказ-наряд — то, ради чего обращаются в лабораторию, и раньше
+    // приходилось начинать с файлообменника, где нужного раздела не видно.
+    res.redirect('/orders');
   } catch (err) {
     console.error(err);
     res.status(500).send('Ошибка сервера');
@@ -531,18 +748,97 @@ app.get('/logout', (req, res) => {
   });
 });
 
+// ---- Пробный период: закончился ----
+//
+// Экран показывает, что произошло, и куда писать. Функционал при этом
+// закрыт целиком, но данные на месте: после оплаты человек возвращается
+// к своим нарядам, а не начинает заново.
+app.get('/trial', (req, res) => {
+  const lab = req.session.labId
+    ? db.prepare('SELECT name, trial_until, trial_email, trial_phone FROM labs WHERE id = ?')
+      .get(req.session.labId)
+    : null;
+  res.render('trial-expired', {
+    lab,
+    loggedIn: !!req.session.user,
+    error: req.query.error ? String(req.query.error) : null,
+    sent: req.query.sent === '1',
+  });
+});
+
+// Продление. Оплаты онлайн ещё нет, поэтому действие одно: доступ снимает
+// менеджер после оплаты. Заявка уходит тем же путём, что и с лендинга, —
+// в Telegram, а если он не настроен, в leads.log. Писать в базу некуда:
+// таблицы заявок нет, а заводить её ради одной формы избыточно.
+app.post('/trial/renew', (req, res) => {
+  const check = TRIAL.validateContact(req.body.email, req.body.phone);
+  if (!check.ok) {
+    return res.redirect('/trial?error=' + encodeURIComponent(check.error));
+  }
+  const lab = req.session.labId
+    ? db.prepare('SELECT name, trial_until, trial_email FROM labs WHERE id = ?').get(req.session.labId)
+    : null;
+  const text = [
+    'ЗАЯВКА НА ПРОДЛЕНИЕ',
+    `Лаборатория: ${lab ? lab.name : 'не указана'}`,
+    `E-mail: ${check.email}${check.phone ? `, тел.: ${check.phone}` : ''}`,
+    `Пробный период истёк: ${lab && lab.trial_until ? lab.trial_until : '—'}`,
+    `Контакт при регистрации: ${lab && lab.trial_email ? lab.trial_email : '—'}`,
+    `Комментарий: ${String(req.body.message || '').trim().slice(0, 1000) || '—'}`,
+  ].join('\n');
+
+  const { send, configured } = require('./src/services/telegram');
+  const deliver = async () => {
+    if (!configured) return { skipped: true };
+    let last = {};
+    // Одна повторная попытка: как и на лендинге, маршрут до Telegram
+    // местами подвисает, и человек ушёл бы, решив, что заявка пропала.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      last = await send(text, { timeoutMs: 10000 });
+      if (last.status === 200) return last;
+      await new Promise(r => setTimeout(r, 1200));
+    }
+    return last;
+  };
+
+  deliver().then(result => {
+    if (result.skipped) {
+      console.log('Заявка на продление (Telegram не настроен):\n' + text);
+      return;
+    }
+    if (result.status === 200) return;
+    // Как и на лендинге: неотправленное не теряем, а дописываем в файл.
+    try {
+      const fs = require('fs');
+      const dir = process.env.LEAD_LOG_DIR || '/var/lib/ztlab';
+      fs.appendFileSync(`${dir}/leads.log`,
+        `\n===== ${new Date().toISOString()} · продление не доставлено =====\n${text}\n`);
+    } catch (e) {
+      console.error('Не удалось записать заявку в leads.log:', e.message);
+    }
+  });
+
+  res.redirect('/trial?sent=1');
+});
+
 // Регистрация новой лаборатории. Создаёт лабораторию и первого
 // администратора за один шаг, чтобы не пришлось настраивать вручную.
-app.post('/register-lab', async (req, res) => {
-  const labName = (req.body.lab_name || '').trim();
-  const userName = (req.body.username || '').trim();
-  const password = req.body.password || '';
+  app.post('/register-lab', async (req, res) => {
+    const labName = (req.body.lab_name || '').trim();
+    const userName = (req.body.username || '').trim();
+    const password = req.body.password || '';
+  
+    if (!labName) return res.status(400).send('Укажите название лаборатории');
+    if (!userName) return res.status(400).send('Укажите имя пользователя');
+    if (password.length < 6) return res.status(400).send('Пароль короче 6 символов');
 
-  if (!labName) return res.status(400).send('Укажите название лаборатории');
-  if (!userName) return res.status(400).send('Укажите имя пользователя');
-  if (password.length < 6) return res.status(400).send('Пароль короче 6 символов');
-
-  try {
+    // Контакт обязателен: без него пробный период нечем продлить, а
+    // человек после недели не понимает, куда писать. Это персональные
+    // данные, поэтому форма регистрации ссылается на политику.
+    const contact = TRIAL.validateContact(req.body.email, req.body.phone);
+    if (!contact.ok) return res.status(400).send(contact.error);
+  
+    try {
     let slug = (req.body.slug || '').trim().toLowerCase()
       .replace(/[^a-z0-9-]/g, '-')
       .replace(/^-+|-+$/g, '');
@@ -553,17 +849,33 @@ app.post('/register-lab', async (req, res) => {
       return res.status(409).send('Такая лаборатория уже зарегистрирована');
     }
 
-    query('INSERT INTO labs (slug, name) VALUES (?, ?)', [slug, labName]);
-    const labId = db.prepare('SELECT id FROM labs WHERE slug = ?').get(slug).id;
+      // Пробный период начинается сразу: неделя отсчитывается от даты
+      // регистрации, а не от первого входа. Иначе «пробный» человек,
+      // зарегистрировавшийся и ушедший на месяц, обнаружил бы истёкший
+      // срок при первом же открытии.
+      query(
+        'INSERT INTO labs (slug, name, trial_until, trial_email, trial_phone) VALUES (?, ?, ?, ?, ?)',
+        [slug, labName, TRIAL.trialUntil(), contact.email, contact.phone]
+      );
+      const labId = db.prepare('SELECT id FROM labs WHERE slug = ?').get(slug).id;
 
     query(
       'INSERT INTO users (name, password_hash, role, active, lab_id) VALUES (?, ?, ?, 1, ?)',
       [userName, hashPassword(password), 'admin', labId]
     );
 
-    req.session.user = userName;
-    req.session.labId = labId;
-    req.session.role = 'admin';
+    // Свой прайс заводим сразу при регистрации, а не при первом
+    // открытии наряда: лаборатория должна начать работать без
+    // предварительного захода на пустую страницу — иначе первый наряд
+    // создавался бы в окружении с пустым справочником.
+    constructions.seed(db, labId);
+
+  req.session.user = userName;
+      req.session.userId = query(
+        'SELECT id FROM users WHERE name = ? AND lab_id = ?', [userName, labId]
+      ).rows[0].id;
+      req.session.labId = labId;
+      req.session.role = 'admin';
     req.session.labSlug = slug;
     res.redirect('/');
   } catch (err) {
@@ -571,6 +883,7 @@ app.post('/register-lab', async (req, res) => {
     res.status(500).send('Ошибка при регистрации');
   }
 });
+
 
 // Главная страница (с перенаправлением для Елены и динамическим поиском)
 app.get('/', async (req, res) => {
@@ -732,6 +1045,33 @@ app.post('/upload', upload.fields([
   }
 });
 
+// Понятный ответ вместо 500, когда загрузку остановил multer.
+// Свои коды отдаём как есть, остальные ошибки разбора формы —
+// как «не удалось загрузить», чтобы пользователь не гадал.
+app.use((err, req, res, next) => {
+  if (!err || !err.name || !err.name.startsWith('Multer')) return next(err);
+
+  // Часть файлов к этому моменту уже лежит во временных папках.
+  if (req.ztlabTmpDirs) {
+    for (const d of req.ztlabTmpDirs) {
+      try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) { /* не критично */ }
+    }
+    req.ztlabTmpDirs.clear();
+  }
+
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).send(
+      `Файл больше ${MAX_FILE_MB} МБ. Загрузите модель в меньшем размере или сожмите архив.`
+    );
+  }
+  if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_PART_COUNT'
+      || err.code === 'LIMIT_FIELD_COUNT') {
+    return res.status(413).send('Слишком много файлов или полей в запросе.');
+  }
+  console.error('Ошибка загрузки:', err.code || err.message);
+  res.status(400).send('Не удалось загрузить файлы. Проверьте размер и количество файлов.');
+});
+
 // Скачивание 3D-файла
 app.get('/download/:id', async (req, res) => {
   const fileId = req.params.id;
@@ -888,40 +1228,54 @@ app.post('/comment/:id', async (req, res) => {
 
 // Страница добавления пользователя
 app.get('/add-user', (req, res) => {
-  if (!req.session.user) return res.redirect('/login');
-  res.render('add-user', { error: null });
-});
+    if (!req.session.user) return res.redirect('/login');
+    const usage = license.usage(db, req.session.labId || 1);
+    res.render('add-user', {
+      error: null, usage, warning: license.warningFor(usage),
+      specializations: SPEC.BY_ROLE,
+    });
+  });
 
 // Добавление сотрудника в лабораторию. Только администратор.
 app.post('/add-user', requireAdmin, async (req, res) => {
-  const { password, newUsername, role } = req.body;
-  const name = (newUsername || '').trim();
+    const { password, newUsername, role } = req.body;
+    const name = (newUsername || '').trim();
+    const labId = req.session.labId || 1;
+    // Места в тарифе считаем на каждой попытке добавить человека, а не
+    // один раз при загрузке формы: между открытием и отправкой могли
+    // завести ещё двоих.
+    const usage = license.usage(db, labId);
+    const fail = (msg) => res.render('add-user', { error: msg, usage, warning: license.warningFor(usage) });
 
-  if (!name) {
-    return res.render('add-user', { error: 'Имя не может быть пустым' });
-  }
-  if (!password || password.length < 6) {
-    return res.render('add-user', { error: 'Пароль должен быть не короче 6 символов' });
-  }
-
-  const newRole = role === 'admin' ? 'admin' : 'tech';
-
-  try {
-    const existing = query(
-      'SELECT id FROM users WHERE name = ? AND lab_id = ?',
-      [name, req.session.labId || 1]
-    ).rows;
-    if (existing.length > 0) {
-      return res.render('add-user', { error: 'Пользователь с таким именем уже существует' });
+    if (!name) {
+      return fail('Имя не может быть пустым');
     }
+    if (!password || password.length < 6) {
+      return fail('Пароль должен быть не короче 6 символов');
+    }
+
+    const newRole = role === 'admin' ? 'admin' : 'tech';
+    // Специализация не выбирает роль и не даёт прав: это подпись «кем
+    // работает». Значение из другой роли отбрасываем, иначе через
+    // подделанную форму можно было бы записать технику «бухгалтером».
+    const specialization = SPEC.fromForm(newRole, req.body.specialization);
+
+    try {
+      const existing = query(
+        'SELECT id FROM users WHERE name = ? AND lab_id = ?',
+        [name, labId]
+      ).rows;
+      if (existing.length > 0) {
+        return fail('Пользователь с таким именем уже существует');
+      }
     query(
-      'INSERT INTO users (name, password_hash, role, active, lab_id) VALUES (?, ?, ?, 1, ?)',
-      [name, hashPassword(password), newRole, req.session.labId || 1]
+      'INSERT INTO users (name, password_hash, role, specialization, active, lab_id) VALUES (?, ?, ?, ?, 1, ?)',
+      [name, hashPassword(password), newRole, specialization, req.session.labId || 1]
     );
     res.redirect('/');
   } catch (err) {
     console.error(err);
-    res.render('add-user', { error: 'Ошибка базы данных' });
+    res.render('add-user', { error: 'Ошибка базы данных', usage, warning: license.warningFor(usage) });
   }
 });
 

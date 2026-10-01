@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Пробный период закончился — ZT Lab</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif; margin: 0; min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            background: #f5f5f5; padding: 16px; color: #2d3748;
+        }
+        .container {
+            max-width: 460px; width: 100%; padding: 28px; background: #fff;
+            border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 { font-size: 21px; margin: 0 0 6px; color: #2d3748; }
+        p { line-height: 1.5; }
+        .badge {
+            display: inline-block; background: #fed7d7; color: #9b1c1c;
+            border-radius: 999px; padding: 4px 12px; font-size: 13px;
+            font-weight: bold; margin-bottom: 14px;
+        }
+        .kept {
+            background: #f0fff4; border: 1px solid #9ae6b4; border-radius: 8px;
+            padding: 12px 14px; font-size: 14px; color: #22543d;
+        }
+        input, textarea, button {
+            width: 100%; padding: 12px; margin: 6px 0; font-size: 16px;
+            border-radius: 6px; font-family: inherit;
+        }
+        input, textarea { border: 1px solid #cbd5e0; }
+        button { background: #4CAF50; color: #fff; border: none; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #45a049; }
+        label { font-size: 13px; color: #4a5568; display: block; margin-bottom: 2px; }
+        .hint { font-size: 13px; color: #718096; }
+        .ok { background: #c6f6d5; color: #22543d; border-radius: 8px; padding: 12px 14px; font-size: 14px; }
+        .err { background: #fed7d7; color: #9b1c1c; border-radius: 8px; padding: 12px 14px; font-size: 14px; }
+        .foot { text-align: center; margin-top: 18px; font-size: 13px; color: #718096; }
+        .foot a { color: #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <span class="badge">Пробный период завершён</span>
+        <h1><%= lab ? lab.name : 'Доступ закрыт' %></h1>
+
+        <% if (!loggedIn) { %>
+            <p>Войдите в лабораторию, чтобы увидеть срок и оставить заявку на продление.</p>
+            <div class="foot"><a href="/login">Войти</a></div>
+        <% } else { %>
+            <p>
+                Бесплатный период в <%= TRIAL_DAYS %> дней закончился
+                <% if (lab && lab.trial_until) { %>
+                    <%= new Date(lab.trial_until).toLocaleDateString('ru-RU') %>
+                <% } else { %>
+                    <%= new Date().toLocaleDateString('ru-RU') %>
+                <% } %>.
+                Работа в приложении приостановлена.
+            </p>
+
+            <div class="kept">
+                <strong>Все данные на месте.</strong>
+                Наряды, переписка, прайс-лист и файлы сохранены — после оплаты
+                вернётся всё до последнего изменения. Ничего загружать заново
+                не придётся.
+            </div>
+
+            <% if (sent) { %>
+                <p class="ok">Заявка отправлена. Мы свяжемся с вами в рабочее время.</p>
+            <% } else { %>
+                <p>Оставьте контакт для продления:</p>
+                <form method="post" action="/trial/renew">
+                    <label for="email">E-mail</label>
+                    <input type="email" id="email" name="email" required
+                           value="<%= lab && lab.trial_email ? lab.trial_email : '' %>"
+                           autocomplete="email">
+                    <label for="phone">Телефон</label>
+                    <input type="tel" id="phone" name="phone"
+                           value="<%= lab && lab.trial_phone ? lab.trial_phone : '' %>"
+                           autocomplete="tel" placeholder="+7 900 000-00-00">
+                    <label for="message">Комментарий <span class="hint">— необязательно</span></label>
+                    <textarea id="message" name="message" rows="2"
+                              placeholder="Вопрос по оплате или тарифу"></textarea>
+                    <button type="submit">Продлить доступ</button>
+                </form>
+                <% if (error) { %><p class="err"><%= error %></p><% } %>
+            <% } %>
+            <div class="foot"><a href="/logout">Выйти</a></div>
+        <% } %>
+    </div>
+</body>
+</html>

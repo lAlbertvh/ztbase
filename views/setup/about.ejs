@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Представьтесь — ZT Lab</title>
+<link rel="stylesheet" href="/css/setup.css">
+</head>
+<body>
+<header>
+  <div class="brand">ZT Lab</div>
+  <div class="sub">Шаг 1 из 4 — представимся</div>
+</header>
+<main>
+  <div class="steps">
+    <div class="s on"></div><div class="s"></div><div class="s"></div>
+    <div class="s"></div><div class="s"></div>
+  </div>
+
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <div class="card">
+    <h2>Представьтесь</h2>
+    <p>Напишите, кто вы, как вас зовут и как называется ваша организация.</p>
+
+    <div class="privacy">
+      Мы не просим фамилию, отчество и паспортные данные. Достаточно имени,
+      по которому вы входите в систему, и роли. Личные данные не собираются
+      и не передаются третьим лицам.
+    </div>
+
+    <form method="post" action="/setup/about">
+      <div class="field">
+        <label for="role">Кто вы</label>
+        <select id="role" name="role">
+          <option value="lab_admin">Администратор лаборатории — мы делаем работы для клиник</option>
+          <option value="dentist_owner">Врач — мы сами принимаем заказы клинике</option>
+        </select>
+        <div class="hint">От этого зависит, какие разделы вы увидите. Поменять можно потом.</div>
+      </div>
+
+      <div class="field">
+        <label for="name">Как вас зовут</label>
+        <input type="text" id="name" name="name" maxlength="60" required
+               value="<%= ownerName %>" placeholder="Сергей" autocomplete="off">
+        <div class="hint">Только имя, без фамилии. Это будет ваш логин.</div>
+      </div>
+
+      <div class="field">
+        <label for="lab_name">Название организации</label>
+        <input type="text" id="lab_name" name="lab_name" maxlength="120" required
+               value="<%= lab.name %>" placeholder="Новый век" autocomplete="off">
+        <div class="hint">
+          Лаборатория — «Новый век». Если вы врач, укажите название клиники,
+          например «Стоматология Денталь»: в нарядах будет видно, кому мы работаем.
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="contact">Контакт для связи <span class="muted">— необязательно</span></label>
+        <input type="text" id="contact" name="contact" maxlength="120"
+               value="<%= lab.contact || '' %>" placeholder="телефон или почта">
+        <div class="hint">Нужен, чтобы мы могли написать при вопросах по настройке.</div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">Дальше</button>
+        <a class="btn" href="/setup">Назад</a>
+      </div>
+    </form>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Администрирование — ZT Lab</title>
+<link rel="stylesheet" href="/css/app.css">
+<style>
+  :root { --line:#e2e5ea; --muted:#6b7280; --accent:#1c64f2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+         background:#f6f7f9; color:#1a1d21; }
+  header { background:#fff; border-bottom:1px solid var(--line); padding:14px 20px;
+           display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0; }
+  .spacer { flex:1; }
+  main { max-width:980px; margin:0 auto; padding:20px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.5px;
+       color:var(--muted); margin:26px 0 10px; }
+  h2:first-of-type { margin-top:6px; }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); }
+  .card { display:block; background:#fff; border:1px solid var(--line);
+          border-left:3px solid var(--accent); border-radius:10px;
+          padding:14px 16px; text-decoration:none; color:inherit; }
+  .card:hover { border-color:#c9ced6; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .card .t { font-weight:600; display:flex; align-items:center; gap:8px; }
+  .card .d { color:var(--muted); font-size:13px; margin-top:4px; }
+  .card.violet { border-left-color:#7c3aed; }
+  .card.cyan    { border-left-color:#0e7490; }
+  .card.green   { border-left-color:#1a6b3c; }
+  .card.amber   { border-left-color:#b45309; }
+  .note { background:#fff; border:1px solid var(--line); border-radius:10px;
+          padding:12px 16px; color:var(--muted); font-size:13px; margin-top:26px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Настройки приложения</h1>
+  <div class="spacer"></div>
+  <span class="muted"><%= currentUser %></span>
+  <a href="/orders">Заказ-наряды</a>
+  <a href="/logout">выход</a>
+</header>
+
+<main>
+
+<%
+/*
+ * Хаб настроек приложения. Каждая карточка ведёт на уже работающий
+ * экран: своей логики тут нет, нужна только точка входа. Раньше эти
+ * разделы существовали, но были спрятаны по разным страницам, и
+ * найти их можно было лишь зная адрес.
+ *
+ * Настройки сайта здесь намеренно нет: у лендинга своя админка с
+ * отдельным паролем, и смешивать её с настройками рабочего приложения
+ * значило бы отправлять администратора лаборатории редактировать
+ * публичные тексты, к которым он не имеет отношения.
+ */
+const sections = [
+  { group: 'Заказы и учёт', items: [
+    { href: '/orders',                       ico: '📋', t: 'Заказ-наряды',          d: 'Список, создание, этапы производства', c: '' },
+    { href: '/orders/catalog/constructions', ico: '🦷', t: 'Конструкции и материалы', d: 'Справочник изделий: что именно изготавливаем, группы, цены и сроки', c: '' },
+    { href: '/orders/catalog/manipulations', ico: '💇', t: 'Манипуляции и ставки',   d: 'Справочник шагов чек-листа и цены для расчёта зарплаты', c: '' },
+    { href: '/orders/stats/manipulations',   ico: '📊', t: 'Отчёт по зарплате',     d: 'Кто сколько выполнил за период', c: '' },
+    { href: '/orders/catalog/materials',     ico: '🧱', t: 'Материалы',             d: 'Справочник материалов и учёт в нарядах', c: 'amber' },
+    { href: '/titan',                        ico: '🔩', t: 'Титановые основания',   d: 'Учёт, статусы и печать', c: 'cyan' },
+  ]},
+    { group: 'Лаборатория', items: [
+      { href: '/add-user',        ico: '👤', t: 'Пользователи',  d: 'Сотрудники лаборатории, вход по паролю', c: 'green' },
+      { href: '/setup/clinics',   ico: '🏥', t: 'Клиники',       d: 'Стоматологии-партнёры, представители и привязка врачей', c: 'green' },
+      { href: '/',                ico: '📁', t: 'Обмен файлами', d: 'Загрузка, скачивание и удаление файлов', c: 'cyan' },
+    ]},
+];
+
+  const u = typeof usage !== 'undefined' ? usage : null;
+  %>
+  
+  <% if (u) { %>
+    <div class="note" style="margin-top:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <strong>Тариф «<%= u.plan.title %>»</strong>
+      <span>
+        <%= u.max %> мест, занято <%= u.used %>
+        <% if (u.contacts) { %> (сотрудников <%= u.staff %>, представителей клиник <%= u.contacts %>)<% } %>
+      </span>
+      <% if (u.over > 0) { %>
+        <span style="color:#9b1c1c">превышение на <%= u.over %> — работать можно, но нужен премиум</span>
+      <% } else { %>
+        <span>свободно <%= u.free %></span>
+      <% } %>
+      <a href="/setup/staff">Команда и тариф</a>
+      <% if (typeof setupPendingHere !== 'undefined' && setupPendingHere) { %>
+        <a href="/setup">Настройка не завершена</a>
+      <% } %>
+    </div>
+  <% } %>
+
+<% sections.forEach(function (s) { %>
+  <h2><%= s.group %></h2>
+  <div class="grid">
+    <% s.items.forEach(function (i) { %>
+      <a class="card<%= i.c ? ' ' + i.c : '' %>" href="<%= i.href %>">
+        <span class="t"><span aria-hidden="true"><%= i.ico %></span><%= i.t %></span>
+        <span class="d"><%= i.d %></span>
+      </a>
+    <% }); %>
+  </div>
+<% }); %>
+
+<div class="note">
+  Стартовые цены манипуляций — <strong>тестовые</strong> (150–500 ₽), нужны, чтобы отчёт
+  по зарплате считал суммы. Замените их своими ставками в справочнике «Манипуляции и ставки».
+</div>
+
+<div class="note">
+  Тексты и картинки сайта (ztbase.ru) правятся отдельно —
+  <a href="/admin/content">админка сайта</a>. У неё свой пароль, и лаборатория к ней отношения не имеет.
+</div>
+
+</main>
+
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f59e0b">
+    <title>Справочник манипуляций</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        .add { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+        .add > div { flex: 1 1 130px; }
+        .add label { display: block; font-size: 12px; color: var(--ink-3); margin-bottom: 3px; }
+        .add input, .add select { width: 100%; }
+        .code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+        .off { opacity: .5; }
+        tr.off td { background: #fafafa; }
+        .edit { display: flex; gap: 6px; align-items: center; }
+        .edit input, .edit select { padding: 5px 7px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <h1>Справочник манипуляций</h1>
+        <a class="btn btn-sm" href="/orders">К нарядам</a>
+        <a class="btn btn-sm" href="/orders/stats/manipulations">Отчёт по зарплате</a>
+        <span class="who"><%= currentUser %> · <a href="/logout">выход</a></span>
+    </header>
+
+    <main>
+    <%- include('../partials/nav', { active: 'orders', inline: true, currentUser, isDentist: false }) %>
+
+    <% if (error) { %>
+        <div class="card" style="border-color:var(--danger);margin-bottom:14px"><%= error %></div>
+    <% } %>
+
+    <div class="card" style="margin-bottom:16px">
+        <h2 style="font-size:15px;margin:0 0 10px">Добавить манипуляцию</h2>
+        <form method="post" action="/orders/catalog/manipulations" class="add">
+            <div style="flex:0 0 120px">
+                <label>Код</label>
+                <input name="code" required maxlength="24" placeholder="CLEAN">
+            </div>
+            <div style="flex:2 1 220px">
+                <label>Название</label>
+                <input name="name" required maxlength="200" placeholder="Очистка и подготовка">
+            </div>
+            <div style="flex:1 1 170px">
+                <label>Вид работы</label>
+                <select name="work_kind">
+                    <option value="">Любой</option>
+                    <% workKinds.forEach(w => { %>
+                        <option value="<%= w.kind %>"><%= w.title %></option>
+                    <% }); %>
+                </select>
+            </div>
+            <div style="flex:0 0 110px">
+                <label>Цена, ₽</label>
+                <input name="price" type="number" min="0" step="0.01" value="0">
+            </div>
+            <button class="btn btn-primary" type="submit">Добавить</button>
+        </form>
+        <p class="muted" style="margin:0">
+            Цена попадает в расчёт зарплаты. Пока она 0, отчёт покажет
+            количество манипуляций, но не суммы.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2 style="font-size:15px;margin:0 0 10px">
+            Все манипуляции (<%= items.length %>)
+        </h2>
+        <p class="muted" style="margin:0 0 10px">
+            Название и цену можно менять — в уже созданных нарядах останутся
+            те значения, что были на момент выполнения.
+        </p>
+        <div style="overflow-x:auto">
+        <table>
+            <thead>
+                <tr><th>Код</th><th>Название</th><th>Вид работы</th><th>Цена, ₽</th><th>Состояние</th><th></th></tr>
+            </thead>
+            <tbody>
+            <% items.forEach(function (m) { %>
+                <tr class="<%= m.active ? '' : 'off' %>">
+                    <td class="code"><%= m.code %></td>
+                    <td colspan="4">
+                        <form method="post" action="/orders/catalog/manipulations/<%= m.id %>" class="edit">
+                            <input name="name" value="<%= m.name %>" maxlength="200" required style="flex:2 1 200px">
+                            <select name="work_kind" style="flex:1 1 150px">
+                                <option value="" <%= m.work_kind ? '' : 'selected' %>>Любой</option>
+                                <% workKinds.forEach(w => { %>
+                                    <option value="<%= w.kind %>" <%= m.work_kind === w.kind ? 'selected' : '' %>><%= w.title %></option>
+                                <% }); %>
+                            </select>
+                            <input name="price" type="number" min="0" step="0.01" value="<%= m.price %>" style="flex:0 0 100px">
+                            <input type="hidden" name="active" value="<%= m.active %>">
+                            <button class="btn btn-sm" type="submit">Сохранить</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" action="/orders/catalog/manipulations/<%= m.id %>/toggle">
+                            <button class="btn btn-sm" type="submit"><%= m.active ? 'Выключить' : 'Включить' %></button>
+                        </form>
+                    </td>
+                </tr>
+            <% }); %>
+            </tbody>
+        </table>
+        </div>
+    </div>
+    </main>
+</body>
+</html>

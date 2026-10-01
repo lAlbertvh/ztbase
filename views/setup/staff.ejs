@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Команда — ZT Lab</title>
+<link rel="stylesheet" href="/css/setup.css">
+</head>
+<body>
+<header>
+  <div class="brand">ZT Lab</div>
+  <div class="sub">Шаг 4 из 4 — команда лаборатории</div>
+</header>
+<main>
+  <div class="steps">
+    <div class="s on"></div><div class="s on"></div><div class="s on"></div>
+    <div class="s on"></div><div class="s"></div>
+  </div>
+
+  <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+
+  <% const u = usage; %>
+  <% const nearLimit = u.used + 1 > u.max; %>
+  <div class="alert <%= u.over > 0 ? 'alert-error' : (nearLimit ? 'alert-warn' : 'alert-info') %>">
+    Тариф «<%= u.plan.title %>»: <%= u.max %> мест, занято <%= u.used %>
+    <% if (u.contacts) { %> (сотрудников <%= u.staff %>, представителей клиник <%= u.contacts %>)<% } %>
+    <% if (u.over > 0) { %> — превышение на <%= u.over %>. Работать можно, но нужен премиум.<% } else if (nearLimit) { %> — следующий человек будет сверх тарифа.<% } %>
+  </div>
+
+  <div class="card">
+    <h2>Кто будет работать</h2>
+    <p>Заведите техников и врачей, которым нужен доступ к нарядам. Пароль от 6 символов,
+       они будут входить по своему имени.</p>
+
+    <form method="post" action="/setup/staff" class="row-form">
+      <div>
+        <label for="u-name">Имя</label>
+        <input type="text" id="u-name" name="name" maxlength="60" placeholder="Мария" autocomplete="off">
+      </div>
+        <div>
+          <label for="u-role">Роль</label>
+          <select id="u-role" name="role" data-spec-select>
+            <option value="tech">Техник</option>
+            <option value="dentist">Врач</option>
+            <option value="admin">Администрация</option>
+          </select>
+        </div>
+        <div>
+          <!-- Специализация одна на роль, поэтому варианты перерисовывает
+               скрипт из данных страницы, а не зашивают все три списка
+               сразу: показывать «Бухгалтер» технику незачем. -->
+          <label for="u-spec">Специализация</label>
+          <select id="u-spec" name="specialization" data-spec-target></select>
+        </div>
+        <div>
+          <label for="u-pass">Пароль</label>
+          <input type="password" id="u-pass" name="password" minlength="6" autocomplete="new-password">
+        </div>
+        <div style="flex:0 0 auto">
+          <button class="btn btn-primary" type="submit">+ Сотрудник</button>
+        </div>
+      </form>
+      <div class="hint">
+        Роль определяет, что сотрудник может делать в системе. Специализация —
+        что именно он изготавливает: по ней видно, кому какую работу
+        отдавать. Необязательна.
+      </div>
+    </div>
+
+  <div class="card">
+    <h2>Сотрудники (<%= staff.length %>)</h2>
+    <% if (!staff.length) { %>
+      <div class="empty">Пока никого нет. Можно начать и одного — остальных добавите позже.</div>
+    <% } else { %>
+      <table>
+          <thead><tr><th>Имя</th><th>Роль</th><th>Специализация</th><th>Состояние</th><th></th></tr></thead>
+          <tbody>
+          <% staff.forEach(function (s) { %>
+            <tr>
+              <td><%= s.name %></td>
+              <td><%= (roleLabels && roleLabels[s.role]) || s.role %></td>
+              <td><%= s.specialization ? specLabel(s.role, s.specialization) : '—' %></td>
+            <td class="<%= s.active ? '' : 'off' %>"><%= s.active ? 'работает' : 'отключён' %></td>
+            <td style="width:110px;text-align:right">
+              <% if (String(s.id) !== String(currentUserId)) { %>
+                <form method="post" action="/setup/staff/<%= s.id %>/disable"
+                      onsubmit="return confirm('<%= s.active ? 'Отключить' : 'Вернуть' %> <%= s.name %>?')">
+                  <button class="btn btn-sm" type="submit"><%= s.active ? 'Отключить' : 'Вернуть' %></button>
+                </form>
+              <% } else { %>
+                <span class="muted" style="font-size:13px">это вы</span>
+              <% } %>
+            </td>
+          </tr>
+        <% }); %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <h2>Тариф</h2>
+    <p>Основной тариф — до <%= 5 %> человек, премиум — до <%= 15 %>. Считаются и
+       сотрудники, и представители клиник: они работают с одними и теми же нарядами.</p>
+    <p>Если человек не помещается в тариф, мы не блокируем работу — только
+       предупреждаем. Переключить тариф можно в админке.</p>
+    <form method="post" action="/setup/finish" class="actions" style="margin-top:0">
+      <button class="btn btn-primary" type="submit">Завершить настройку</button>
+      <span class="muted" style="font-size:13px">Вернуться можно будет из админки в любой момент.</span>
+    </form>
+  </div>
+
+  <div class="actions">
+    <a class="btn" href="/setup/services">Назад</a>
+  </div>
+</main>
+
+<script>
+// Специализации приходят с сервера: список для роли меняет форму на
+// лету, поэтому в разметке нет ни «терапевта», ни «керамиста» — только
+// то, что относится к выбранной роли.
+(function () {
+  var ALL = <%- JSON.stringify(specializations) %>;
+  var roleSel = document.querySelector('[data-spec-select]');
+  var specSel = document.querySelector('[data-spec-target]');
+  if (!roleSel || !specSel) return;
+
+  function fill() {
+    var list = ALL[roleSel.value] || [];
+    // Первый вариант — пустой: не специализация по умолчанию, а
+    // сознательный выбор, иначе новый сотрудник молча попал бы в
+    // чужие отчёты.
+    specSel.innerHTML = '<option value="">— не указана —</option>' + list.map(function (item) {
+      return '<option value="' + item[0] + '">' + item[1] + '</option>';
+    }).join('');
+  }
+  roleSel.addEventListener('change', fill);
+  fill();
+})();
+</script>
+</body>
+</html>
