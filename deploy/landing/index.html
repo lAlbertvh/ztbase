@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ZT Lab — зуботехническая лаборатория полного цикла</title>
-<meta name="description" content="Зуботехническая лаборатория ZT Lab: коронки, мосты, протезы, виниры, абатменты имплантов из диоксида циркония и металла. Онлайн-заказ-наряды, контроль сроков и этапов изготовления, доставка по России.">
+<title>ZT Lab — приложение для зубных техников и зуботехнических лабораторий</title>
+<meta name="description" content="Приложение для зубных техников: заказ-наряды, чек-лист манипуляций с телефона по QR, расчёт зарплаты по выполненным операциям, обмен STL и сканами, учёт титановых оснований.">
 <link rel="canonical" href="https://ztbase.ru/">
 <meta name="theme-color" content="#0f172a">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ZT Lab">
-<meta property="og:title" content="ZT Lab — зуботехническая лаборатория полного цикла">
-<meta property="og:description" content="Коронки, мосты, протезы и абатменты имплантов. Онлайн-заказ-наряды и контроль этапов изготовления.">
+<meta property="og:title" content="ZT Lab — приложение для зубных техников и лабораторий">
+<meta property="og:description" content="Заказ-наряды, чек-лист манипуляций с телефона, расчёт зарплаты по выполненным операциям. Для техников и их руководителей.">
 <meta property="og:url" content="https://ztbase.ru/">
 <meta property="og:locale" content="ru_RU">
 <meta name="twitter:card" content="summary_large_image">
@@ -23,24 +23,15 @@
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "MedicalBusiness",
+  "@type": "SoftwareApplication",
   "name": "ZT Lab",
   "url": "https://ztbase.ru/",
-  "logo": "https://ztbase.ru/icons/icon-512.png",
-  "description": "Зуботехническая лаборатория полного цикла: коронки, мосты, съёмные и несъёмные протезы, абатменты имплантов.",
-  "medicalSpecialty": "Dental",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "inLanguage": "ru-RU",
+  "description": "Приложение для зубных техников и зуботехнических лабораторий: заказ-наряды, чек-лист манипуляций с отметкой с телефона, расчёт зарплаты по выполненным операциям, обмен STL и сканами, учёт титановых оснований.",
   "areaServed": { "@type": "Country", "name": "Россия" },
-  "availableLanguage": ["Russian"],
-  "hasOfferCatalog": {
-    "@type": "OfferCatalog",
-    "name": "Ортопедические конструкции",
-    "itemListElement": [
-      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Коронки из диоксида циркония" } },
-      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Мосты на имплантах" } },
-      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Съёмные протезы" } },
-      { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Абатменты и винты" } }
-    ]
-  }
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "RUR", "description": "Стоимость подбирается под лабораторию" }
 }
 </script>
 
@@ -125,6 +116,18 @@ header.top{
 .card .row:last-child{border-bottom:0}
 .card .row span:first-child{color:var(--muted)}
 .card .row b{font-weight:650}
+
+/* Поля формы заявки. Без них поля растягиваются на всю ширину контейнера
+   и выглядят как обычный текст, а не как элементы ввода. */
+input[type=text], textarea{
+  width:100%; padding:10px 12px; font:inherit; font-size:15px; color:inherit;
+  background:#fff; border:1px solid var(--line); border-radius:8px;
+}
+input[type=text]:focus, textarea:focus{
+  outline:2px solid rgba(37,99,235,.35); outline-offset:1px; border-color:#2563eb;
+}
+textarea{resize:vertical; min-height:84px}
+input::placeholder, textarea::placeholder{color:#9aa3b2}
 .pill{display:inline-block; padding:3px 10px; border-radius:999px; font-size:12.5px; font-weight:650}
 .pill.done{background:#dcfce7; color:#15803d}
 .pill.work{background:#fef3c7; color:#b45309}
@@ -140,6 +143,9 @@ header.top{
   font-size:20px; background:#eff6ff; margin-bottom:14px;
 }
 .feature p{color:var(--ink-2); font-size:15px; margin:0}
+.ticks{margin:0; padding:0; list-style:none; font-size:15px; color:var(--ink-2)}
+.ticks li{padding:7px 0 7px 26px; position:relative}
+.ticks li::before{content:"✓"; position:absolute; left:0; color:#16a34a; font-weight:800}
 
 /* Шаги */
 .steps{display:grid; grid-template-columns:repeat(4,1fr); gap:18px; counter-reset:s}
@@ -205,11 +211,12 @@ footer{background:var(--bg-soft); border-top:1px solid var(--line); padding:52px
   <div class="wrap">
     <a class="brand" href="/"><span class="mark">Z</span> ZT Lab</a>
     <nav>
-      <a href="#services">Конструкции</a>
-      <a href="#how">Как работаем</a>
-      <a href="#prices">Тарифы</a>
+      <a href="#app">Возможности</a>
+      <a href="#how">Как внедрить</a>
+      <a href="#teams">Кому полезно</a>
+      <a href="#services">Услуги</a>
       <a href="#contacts">Контакты</a>
-      <a class="btn btn-primary" href="https://app.ztbase.ru/login">Войти в кабинет</a>
+      <a class="btn btn-primary" href="https://www.ztbase.ru/login">Войти в кабинет</a>
     </nav>
   </div>
 </header>
@@ -217,179 +224,195 @@ footer{background:var(--bg-soft); border-top:1px solid var(--line); padding:52px
 <section class="hero">
   <div class="wrap">
     <div>
-      <span class="badge">Цифровая зуботехническая лаборатория</span>
-      <h1>Ортопедические конструкции без срывов сроков</h1>
+      <span class="badge">Приложение для зубных техников</span>
+      <h1>Работа техника и деньги лаборатории — в одном приложении</h1>
       <p class="lead">
-        Коронки, мосты, съёмные протезы и абатменты имплантов из диоксида циркония,
-        кобальт-хрома и PMMA. Каждый заказ ведём в электронном наряде: вы видите
-        этап изготовления и срок, а не звоните «как там?».
+        Заказ-наряды, чек-лист манипуляций с отметкой прямо с телефона по QR-коду
+        и расчёт зарплаты по фактически выполненным операциям. Никаких тетрадок,
+        переписок и «а сколько я в итоге заработал».
       </p>
       <div class="cta-row">
-        <a class="btn btn-primary btn-lg" href="https://app.ztbase.ru/login">Войти в кабинет клиники</a>
-        <a class="btn btn-ghost btn-lg" href="#contacts">Оставить заявку</a>
+        <a class="btn btn-primary btn-lg" href="#contacts">Получить демо-доступ</a>
+        <a class="btn btn-ghost btn-lg" href="https://www.ztbase.ru/login">Войти в кабинет</a>
       </div>
       <div class="trust">
-        <div><b>2–5 дней</b>обычный срок</div>
-        <div><b>1 день</b>срочное изготовление</div>
-        <div><b>100%</b>контроль этапов онлайн</div>
-        <div><b>по РФ</b>доставка</div>
+        <div><b>30 сек</b>отметить операцию</div>
+        <div><b>по факту</b>расчёт зарплаты</div>
+        <div><b>из телефона</b>чек-лист по QR</div>
+        <div><b>за 1 день</b>первый наряд в системе</div>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin-bottom:14px">Заказ-наряд № 24-0187</h3>
-      <div class="row"><span>Клиника</span><b>«Дентал плюс»</b></div>
-      <div class="row"><span>Конструкция</span><b>Мост на имплантах, 4 ед.</b></div>
-      <div class="row"><span>Материал</span><b>Диоксид циркония, A2</b></div>
-      <div class="row"><span>Принят</span><b>14 сентября</b></div>
-      <div class="row"><span>Обещан</span><b>17 сентября</b></div>
-      <div class="row">
-        <span>Этап</span>
-        <b><span class="pill done">Каркас</span> <span class="pill work">Фрезеровка</span> <span class="pill wait">Глазурь</span></b>
+      <h3 style="margin-bottom:14px">Чек-лист манипуляций · Наряд № 24-0187</h3>
+      <div class="row"><span>Сканирование модели</span><b><span class="pill done">Готово</span></b></div>
+      <div class="row"><span>Моделирование каркаса</span><b><span class="pill work">Иван П.</span></b></div>
+      <div class="row"><span>Фрезерование</span><b><span class="pill done">Готово</span></b></div>
+      <div class="row"><span>Наложение керамики</span><b><span class="pill wait">Ожидает</span></b></div>
+      <div class="row"><span>Контроль качества</span><b><span class="pill wait">Ожидает</span></b></div>
+      <div class="row" style="border-top:1px solid var(--line); border-bottom:0; margin-top:8px; padding-top:14px">
+        <span>Заработано за наряд</span><b>1 750 ₽</b>
       </div>
     </div>
   </div>
 </section>
 
-<section id="services">
+<section id="app">
   <div class="wrap">
-    <div class="center" style="max-width:60ch; margin:0 auto 46px">
-      <h2>Что мы изготавливаем</h2>
-      <p class="muted">Работаем по цифровому сканированию и классическим слепкам.
-      Технология подбирается под клиническую задачу и бюджет пациента.</p>
+    <div class="center" style="max-width:62ch; margin:0 auto 46px">
+      <h2>Что делает приложение</h2>
+      <p class="muted">Всё, что зуботехническая лаборатория ведёт руками и в тетрадях,
+      переезжает в одну систему: от наряда до расчёта зарплаты.</p>
     </div>
-    <ul class="svc">
-      <li>Коронки из диоксида циркония, фрезерованные по цифровому сканированию</li>
-      <li>Металлокерамические коронки и мосты на каркасе из кобальт-хрома</li>
-      <li>Виниры и накладки из керамики E.max и диоксида</li>
-      <li>Мосты на имплантах, в том числе по цифровому протоколу</li>
-      <li>Индивидуальные абатменты, муфты, винты и аналоги</li>
-      <li>Съёмные протезы: бюгельные, частичные, мягкие</li>
-      <li>Протезы на имплантах: All-on-4, All-on-6</li>
-      <li>Защитные капы, ретейнеры, спортивные шины</li>
-      <li>Диагностические и примерочные конструкции</li>
-      <li>Ремонт и коррекция ранее изготовленных работ</li>
-    </ul>
+    <div class="grid grid-3">
+      <div class="feature">
+        <div class="ico">📋</div>
+        <h3>Заказ-наряды</h3>
+        <p>Зубы по формуле, вид конструкции, материал, цвет и срок. Клиника видит
+        статус заказа, а не звонит «как там».</p>
+      </div>
+      <div class="feature">
+        <div class="ico">📱</div>
+        <h3>Чек-лист с телефона</h3>
+        <p>Техник открывает наряд камерой по QR-коду и отмечает выполненные
+        операции большими кнопками. Бумажный чек-лист не нужен.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">💰</div>
+        <h3>Расчёт зарплаты по факту</h3>
+        <p>Сколько операций выполнил техник за месяц и на какую сумму. Снятая
+        отметка вычитается, спорные случаи видны в журнале.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">📁</div>
+        <h3>Обмен файлами</h3>
+        <p>STL, сканы и фото хранятся в одном месте рядом с нарядом, а не в
+        папке «Новые сканы (2)» на общем диске.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">🔩</div>
+        <h3>Титановые основания</h3>
+        <p>Учёт заготовок, статусы и печать этикеток. Сколько заказали,
+        сколько отдали, что осталось на складе.</p>
+      </div>
+      <div class="feature">
+        <div class="ico">🔒</div>
+        <h3>Разделение прав</h3>
+        <p>Техник отмечает свою работу, руководитель видит расчёт и каталог,
+        клиника — только свои наряды. Данных чужой лаборатории не существует.</p>
+      </div>
+    </div>
   </div>
 </section>
 
 <section class="soft" id="how">
   <div class="wrap">
     <div class="center" style="max-width:56ch; margin:0 auto 46px">
-      <h2>Как устроена работа</h2>
-      <p class="muted">От заявки до отгрузки всё идёт в одном наряде. Ничего не теряется
-      в переписке и таблицах.</p>
+      <h2>Как внедряем</h2>
+      <p class="muted">Не требуется переносить архив: стартовать можно с одного наряда
+      в день, дальше система затягивает остальное сама.</p>
     </div>
     <div class="steps">
       <div class="step">
-        <h3>Заявка</h3>
-        <p>Вы вносите данные в кабинете: зубы по формуле, конструкция, материал, цвет, срок.</p>
+        <h3>Заявка и демо</h3>
+        <p>Показываем приложение на примере вашей лаборатории и её типовых нарядах.</p>
       </div>
       <div class="step">
-        <h3>Подтверждение</h3>
-        <p>Технолог проверяет заказ и уточняет детали: систему импланта, абатмент, сканы.</p>
+        <h3>Справочники и ставки</h3>
+        <p>Заносим ваши манипуляции и цены. Расчёт зарплаты сразу считает по вашим цифрам.</p>
       </div>
       <div class="step">
-        <h3>Производство</h3>
-        <p>Каждый этап отмечается в наряде: сканирование, фрезеровка, обжиг, контроль.</p>
+        <h3>Обучение</h3>
+        <p>Показываем технику отметку с телефона, руководителю — отчёт. Обычно полчаса.</p>
       </div>
       <div class="step">
-        <h3>Отгрузка</h3>
-        <p>Готовая работа едет в клинику. Срок и трек фиксируются в том же наряде.</p>
+        <h3>Работа и поддержка</h3>
+        <p>Подключаем клинику, остальные наряды заводятся уже в приложении.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section>
+<section id="teams">
   <div class="wrap">
-    <div class="center" style="max-width:58ch; margin:0 auto 46px">
-      <h2>Почему клиенты остаются</h2>
-      <p class="muted">Мы работаем как продолжение вашего технического отдела, а не как
-      «цех в интернете».</p>
+    <div class="center" style="max-width:60ch; margin:0 auto 46px">
+      <h2>Кому полезно</h2>
+      <p class="muted">Технику и руководителю лаборатории приложение решает разные
+      задачи — и не мешает друг другу.</p>
     </div>
-    <div class="grid grid-3">
+    <div class="grid grid-2">
       <div class="feature">
-        <div class="ico">📋</div>
-        <h3>Прозрачные этапы</h3>
-        <p>Статус заказа виден в кабинете. Снят вопрос «что с моим мостом?» — ответ виден сразу.</p>
+        <div class="ico">🦷</div>
+        <h3>Зубному технику</h3>
+        <ul class="ticks">
+          <li>Отметить операцию с телефона за несколько секунд, не выходя с рабочего места</li>
+          <li>Видеть весь наряд: что приняли, что уже сделано, что дальше</li>
+          <li>Не переспрашивать, что за конструкция и какой зуб — всё в карточке</li>
+          <li>Сканы и модели лежат рядом с нарядом, а не в общей папке</li>
+          <li>Понятная история: что и сколько ты сделал за месяц</li>
+        </ul>
       </div>
       <div class="feature">
-        <div class="ico">⚡</div>
-        <h3>Срочные заказы</h3>
-        <p>Отдельный приоритетный поток: работа берётся в работу сразу после подтверждения.</p>
-      </div>
-      <div class="feature">
-        <div class="ico">🎯</div>
-        <h3>Точность цифры</h3>
-        <p>Работаем по сканам, а не по слепкам: выше точность посадки и меньше примерок.</p>
-      </div>
-      <div class="feature">
-        <div class="ico">🧪</div>
-        <h3>Контроль качества</h3>
-        <p>Каждый заказ проходит проверку перед отгрузкой. Брак переделываем за свой счёт.</p>
-      </div>
-      <div class="feature">
-        <div class="ico">🤝</div>
-        <h3>Один менеджер</h3>
-        <p>Постоянный контакт, а не переписка с разными людьми. История заказов сохраняется.</p>
-      </div>
-      <div class="feature">
-        <div class="ico">📦</div>
-        <h3>Комплектующие</h3>
-        <p>Поставляем абатменты, муфты, винты и расходники вместе с работой.</p>
+        <div class="ico">📈</div>
+        <h3>Руководителю лаборатории</h3>
+        <ul class="ticks">
+          <li>Зарплата считается сама из отметок, а не «по памяти прошлого месяца»</li>
+          <li>Видно, кто и как быстро ведёт наряды, где узкое место</li>
+          <li>Сроки клиентам подтверждаются фактом, а не обещанием</li>
+          <li>История не теряется при уходе сотрудника и смене подрядчика</li>
+          <li>Никаких таблиц и сверок в конце месяца</li>
+        </ul>
       </div>
     </div>
   </div>
 </section>
 
-<section class="soft" id="prices">
+<section class="soft" id="start">
   <div class="wrap">
     <div class="center" style="max-width:58ch; margin:0 auto 46px">
-      <h2>Тарифы обслуживания</h2>
-      <p class="muted">Стоимость конструкций рассчитывается индивидуально и фиксируется
-      в наряде до начала работ.</p>
+      <h2>Стоимость</h2>
+      <p class="muted">Единой цены нет: объём нарядов, число сотрудников и клиник
+      у каждой лаборатории разные. Считаем под ваш объём и показываем расчёт
+      на демо-доступе — до того, как вы что-то решите.</p>
     </div>
     <div class="grid grid-3">
       <div class="price">
-        <div class="name">Разовый заказ</div>
-        <div class="sum">по смете <small>за конструкцию</small></div>
-        <p class="muted" style="font-size:14px">Подходит клиникам с небольшим потоком.</p>
+        <div class="name">Технику</div>
+        <div class="sum">по запросу <small>для внедрения</small></div>
+        <p class="muted" style="font-size:14px">Один сотрудник, без настройки цен.</p>
         <ul>
-          <li>Расчёт по цифровому сканированию</li>
-          <li>Срок от 2 рабочих дней</li>
-          <li>Доставка по России</li>
-          <li>Гарантия на изготовление</li>
+          <li>Заказ-наряды и чек-лист с телефона</li>
+          <li>Обмен STL и сканами</li>
+          <li>Учёт титановых оснований</li>
         </ul>
       </div>
       <div class="price pop">
         <span class="tag">Чаще всего выбирают</span>
-        <div class="name">Абонемент клиники</div>
-        <div class="sum">индивидуально <small>в месяц</small></div>
-        <p class="muted" style="font-size:14px">Для клиник с регулярным потоком пациентов.</p>
+        <div class="name">Лаборатории</div>
+        <div class="sum">под ваш объём <small>в месяц</small></div>
+        <p class="muted" style="font-size:14px">Команда, несколько клиник, прозрачные деньги.</p>
         <ul>
-          <li>Всё из тарифа «Разовый заказ»</li>
-          <li>Приоритет в очереди на срочные работы</li>
-          <li>Личный кабинет с историей заказов</li>
-          <li>Консультация по сложным случаям</li>
-          <li>Фиксированный график поставок</li>
+          <li>Всё из первого варианта для каждого сотрудника</li>
+          <li>Расчёт зарплаты по выполненным операциям</li>
+          <li>Свои справочники манипуляций и ставки</li>
+          <li>Кабинет клиники с историей заказов</li>
+          <li>Коды приглашений для новых сотрудников</li>
         </ul>
       </div>
       <div class="price">
-        <div class="name">Цифровой поток</div>
-        <div class="sum">под проект <small>цифровой протокол</small></div>
-        <p class="muted" style="font-size:14px">Полный переход клиники на цифровое изготовление.</p>
+        <div class="name">Внедрение</div>
+        <div class="sum">помогаем <small>на старте</small></div>
+        <p class="muted" style="font-size:14px">Перенос справочников и обучение.</p>
         <ul>
-          <li>Настройка сканирования и протокола</li>
-          <li>Обучение персонала</li>
-          <li>Интеграция с вашей CRM</li>
-          <li>Технологическое сопровождение</li>
+          <li>Занос ваших манипуляций и цен</li>
+          <li>Обучение техников и руководителя</li>
+          <li>Подключение клиник по приглашению</li>
         </ul>
       </div>
     </div>
     <p class="center muted" style="margin-top:26px; font-size:14px">
-      Точная стоимость зависит от материала, числа единиц и срока.
-      Актуальную смету пришлём после заявки.
+      На демо-доступе заполните реальный наряд — суммы и отчёт посчитаются
+      по вашим ставкам, а не по демонстрационным.
     </p>
   </div>
 </section>
@@ -397,37 +420,60 @@ footer{background:var(--bg-soft); border-top:1px solid var(--line); padding:52px
 <section>
   <div class="wrap">
     <div class="cta">
-      <h2>Уже работаете с нами? Войдите в кабинет</h2>
-      <p>В кабинете клиники видны заказ-наряды, этапы изготовления и сроки.
-      Новые заявки оставляйте по телефону или в форме ниже — мы свяжемся в течение рабочего дня.</p>
+      <h2>Посмотрите приложение на своих нарядах</h2>
+      <p>Зайдём в демо вместе с вами, заведём реальный заказ-наряд и посчитаем
+      зарплату по вашим ставкам. Без установки и без передачи данных пациентов.</p>
       <div class="cta-row">
-        <a class="btn btn-primary btn-lg" href="https://app.ztbase.ru/login">Войти в кабинет</a>
-        <a class="btn btn-ghost btn-lg" href="#contacts">Стать клиентом</a>
+        <a class="btn btn-primary btn-lg" href="#contacts">Запросить демо-доступ</a>
+        <a class="btn btn-ghost btn-lg" href="https://www.ztbase.ru/login">Войти в кабинет</a>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="soft" id="services">
+  <div class="wrap">
+    <div class="center" style="max-width:62ch; margin:0 auto 34px">
+      <h2>Изготовление конструкций</h2>
+      <p class="muted">Это второе направление: мы изготавливаем ортопедические
+      конструкции и ведём их в том же приложении. Нужен расчёт — напишите,
+      приложение покажет и сроки, и стоимость.</p>
+    </div>
+    <ul class="svc">
+      <li>Коронки и мосты из диоксида циркония</li>
+      <li>Металлокерамические конструкции на каркасе из кобальт-хрома</li>
+      <li>Виниры и накладки из керамики E.max и диоксида</li>
+      <li>Мосты и протезы на имплантах, All-on-4 и All-on-6</li>
+      <li>Индивидуальные абатменты, муфты и винты</li>
+      <li>Съёмные и бюгельные протезы</li>
+      <li>Ретейнеры, капы и спортивные шины</li>
+      <li>Ремонт и коррекция ранее изготовленных работ</li>
+    </ul>
   </div>
 </section>
 
 <section class="soft" id="contacts">
   <div class="wrap">
     <div class="center" style="max-width:56ch; margin:0 auto 40px">
-      <h2>Контакты</h2>
-      <p class="muted">Приём заявок — пн–пт, 9:00–19:00 (МСК). Срочные заказы принимаем в выходные.</p>
+        <h2>Запросить демо-доступ</h2>
+        <p class="muted">Напишите, сколько у вас нарядов в месяц и сколько техников
+        работает. Свяжемся в рабочее время и покажем приложение на ваших данных.
+        После регистрации у вас <b>7 дней полного доступа</b> — без ограничений по функциям.</p>
     </div>
     <div class="grid grid-3" style="text-align:center">
       <div class="feature">
         <div class="ico" style="margin-inline:auto">📞</div>
         <h3>Телефон</h3>
         <p class="muted" style="margin:0">
-          <a href="tel:+70000000000">+7 000 000-00-00</a><br>
-          <span style="font-size:13.5px">уточните номер перед публикацией</span>
+          <a href="tel:+79234836594">+7 923 483-65-94</a><br>
+          <span style="font-size:13.5px">звонки и WhatsApp</span>
         </p>
       </div>
       <div class="feature">
         <div class="ico" style="margin-inline:auto">✉️</div>
         <h3>Почта</h3>
         <p class="muted" style="margin:0">
-          <a href="mailto:info@ztbase.ru">info@ztbase.ru</a><br>
+          <a href="mailto:alik_alikovich@mail.ru">alik_alikovich@mail.ru</a><br>
           <span style="font-size:13.5px">для нарядов и документов</span>
         </p>
       </div>
@@ -435,14 +481,56 @@ footer{background:var(--bg-soft); border-top:1px solid var(--line); padding:52px
         <div class="ico" style="margin-inline:auto">💬</div>
         <h3>Мессенджеры</h3>
         <p class="muted" style="margin:0">
-          Telegram · WhatsApp<br>
-          <span style="font-size:13.5px">уточните аккаунты перед публикацией</span>
+          <a href="https://t.me/ztbaseBot">Telegram</a> · WhatsApp<br>
+          <span style="font-size:13.5px">ответ в рабочее время</span>
         </p>
       </div>
     </div>
+
+    <form class="card" id="lead" method="post" action="https://www.ztbase.ru/lead" style="max-width:640px; margin:34px auto 0">
+        <h3 style="margin:0 0 6px">Заявка на демо-доступ</h3>
+        <p class="muted" style="margin:0 0 16px; font-size:14px">
+          Перезвоним или напишем в рабочее время. Медицинские данные присылать не нужно.
+        </p>
+
+        <!-- Срок пробного периода сообщаем до регистрации, а не после:
+             человек должен решать, заводить ли кабинет, зная срок. -->
+        <div style="background:#fff7ed; border:1px solid #fdba74; border-radius:10px;
+                    padding:12px 14px; margin:0 0 16px; font-size:14px; color:#7c2d12; text-align:left">
+          <b>Бесплатный пробный период — 7 дней.</b>
+          Все функции открыты: наряды, переписка, прайс-лист, расчёт зарплаты.
+          Через неделю работа приостанавливается до оплаты — наряды и файлы сохраняются
+          и возвращаются после оплаты.
+        </div>
+
+      <!-- honeypot: настоящий посетитель это поле не видит и не заполняет -->
+      <div style="position:absolute; left:-9999px" aria-hidden="true">
+        <label>Не заполняйте это поле<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+
+      <div class="grid grid-2" style="gap:12px">
+        <div>
+          <label for="lead-name" style="display:block; font-size:13px; margin-bottom:5px">Как к вам обращаться</label>
+          <input id="lead-name" name="name" type="text" required maxlength="120" placeholder="Имя">
+        </div>
+        <div>
+          <label for="lead-contact" style="display:block; font-size:13px; margin-bottom:5px">Телефон, Telegram или почта</label>
+          <input id="lead-contact" name="contact" type="text" required maxlength="160" placeholder="+7 ... или @nick">
+        </div>
+      </div>
+
+      <label for="lead-message" style="display:block; font-size:13px; margin:12px 0 5px">Что важно рассказать о вашей лаборатории</label>
+      <textarea id="lead-message" name="message" rows="3" maxlength="2000"
+                placeholder="Например: 3 техника, около 300 нарядов в месяц, работаем с 12 клиниками. Хотим видеть расчёт зарплаты"></textarea>
+
+      <div style="display:flex; gap:12px; align-items:center; margin-top:14px; flex-wrap:wrap">
+        <button class="btn btn-primary btn-lg" type="submit">Отправить заявку</button>
+        <span id="lead-note" class="muted" style="font-size:13px">Отвечаем пн–пт, 9:00–19:00</span>
+      </div>
+    </form>
     <p class="center muted" style="margin-top:28px; font-size:13.5px">
       Мы не храним и не передаём медицинские данные пациентов.
-      Для оформления заказа нужен только номер наряда и клинические параметры конструкции.
+      Для заказа достаточно номера наряда и клинических параметров конструкции.
     </p>
   </div>
 </section>
@@ -452,16 +540,19 @@ footer{background:var(--bg-soft); border-top:1px solid var(--line); padding:52px
     <div class="foot">
       <div>
         <a class="brand" href="/" style="margin-bottom:12px"><span class="mark">Z</span> ZT Lab</a>
-        <p class="muted" style="max-width:34ch">Зуботехническая лаборатория полного цикла.
-        Работаем с клиниками и стоматологами по всей России.</p>
+        <p class="muted" style="max-width:34ch">Приложение для зубных техников
+        и зуботехнических лабораторий. Дополнительно изготавливаем ортопедические
+        конструкции.</p>
       </div>
       <div>
         <h4>Навигация</h4>
         <ul>
-          <li><a href="#services">Конструкции</a></li>
-          <li><a href="#how">Как работаем</a></li>
-          <li><a href="#prices">Тарифы</a></li>
-          <li><a href="https://app.ztbase.ru/login">Кабинет клиники</a></li>
+          <li><a href="#app">Возможности</a></li>
+          <li><a href="#how">Как внедрить</a></li>
+          <li><a href="#teams">Кому полезно</a></li>
+          <li><a href="#start">Стоимость</a></li>
+          <li><a href="#services">Услуги</a></li>
+          <li><a href="https://www.ztbase.ru/login">Кабинет</a></li>
         </ul>
       </div>
       <div>
@@ -476,13 +567,53 @@ footer{background:var(--bg-soft); border-top:1px solid var(--line); padding:52px
     <div class="copy">
       © <span id="year">2026</span> ZT Lab. Все права защищены.
       <span style="display:block; margin-top:6px; font-size:13px">
-        Перед запуском в продакшен укажите реальные реквизиты, телефон, почту
-        и адрес организации, а также заполните страницы политики и оферты.
+        Данные пациентов передаются по защищённому каналу и не публикуются
+        на сайте. Реквизиты и правовые документы — по запросу.
       </span>
     </div>
   </div>
 </footer>
 
 <script>document.getElementById('year').textContent=new Date().getFullYear();</script>
+
+<script>
+// Отправка заявки без перезагрузки страницы. Обычная отправка формы
+// работала бы и так, но после неё посетитель терял заполненный текст
+// и position в якорях, а ответ сервера выглядел бы как голая страница.
+(function () {
+  var form = document.getElementById('lead');
+  if (!form) return;
+  var note = document.getElementById('lead-note');
+  var btn = form.querySelector('button[type=submit]');
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    btn.disabled = true;
+    note.textContent = 'Отправляем…';
+
+    fetch(form.action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(new FormData(form)).toString()
+    }).then(function (r) {
+      return r.text().then(function (t) { return { ok: r.ok, text: t }; });
+    }).then(function (res) {
+      if (res.ok) {
+        form.reset();
+        note.textContent = 'Заявка отправлена. Мы свяжемся в рабочее время.';
+        note.style.color = '#15803d';
+      } else {
+        note.textContent = res.text || 'Не удалось отправить. Позвоните, пожалуйста.';
+        note.style.color = '#b42318';
+        btn.disabled = false;
+      }
+    }).catch(function () {
+      note.textContent = 'Нет связи с сервером. Позвоните, пожалуйста.';
+      note.style.color = '#b42318';
+      btn.disabled = false;
+    });
+  });
+})();
+</script>
 </body>
 </html>
