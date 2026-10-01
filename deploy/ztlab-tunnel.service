@@ -1,0 +1,26 @@
+[Unit]
+Description=Обратный SSH-туннель ZT Lab: приложение на ноутбуке -> VPS
+Documentation=https://ztbase.ru
+After=network-online.target ztlab.service
+Wants=network-online.target
+Requires=ztlab.service
+
+[Service]
+Type=simple
+User=tapir
+# autossh переподключается сам, если связь пропала. Прямой WireGuard
+# на этой сети блокируется провайдером, поэтому приложение пробрасывается
+# через обычный SSH по TCP — этот протокол здесь работает стабильно.
+ExecStart=/usr/bin/autossh -M 0 -N \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -o ExitOnForwardFailure=yes \
+  -o StrictHostKeyChecking=accept-new \
+  -R 127.0.0.1:3000:127.0.0.1:3000 root@157.22.175.141
+Restart=always
+RestartSec=10
+# Туннель не должен мешать выключению ноутбука.
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

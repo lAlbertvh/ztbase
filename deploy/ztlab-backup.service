@@ -1,0 +1,18 @@
+[Unit]
+Description=Резервное копирование ZT Lab
+Documentation=file:///opt/ztlab/deploy/README.md
+# Приложение намеренно НЕ останавливается: backup.sh снимает копию
+# командой .backup, которая рассчитана на работающую базу в режиме WAL
+# и даёт согласованный снимок без остановки сервиса.
+After=ztlab.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/ztlab/deploy/backup.sh
+# Лучше упасть с ошибкой в журнале, чем тихо делать вид, что копия есть.
+SuccessExitStatus=0
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=multi-user.target

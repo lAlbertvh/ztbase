@@ -1,0 +1,12 @@
+[Unit]
+Description=Регулярная проверка живости ZT Lab
+Documentation=file:///opt/ztlab/deploy/README.md
+
+[Timer]
+# Две минуты: достаточно быстро, чтобы падение заметили в тот же час,
+# и достаточно редко, чтобы не дёргать приложение лишними запросами.
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

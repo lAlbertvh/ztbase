@@ -1,0 +1,12 @@
+[Unit]
+Description=Проверка живости ZT Lab
+Documentation=file:///opt/ztlab/deploy/README.md
+After=ztlab.service
+
+[Service]
+Type=oneshot
+User=root
+# Таймер не должен копиться: если проверка зависла, следующая всё
+# равно бессмысленна.
+ExecStart=/opt/ztlab/deploy/health-check.sh
+TimeoutStartSec=60

@@ -1,0 +1,16 @@
+[Unit]
+Description=Ежедневная резервная копия ZT Lab
+Documentation=file:/opt/ztlab/deploy/README.md
+
+[Timer]
+# В 3:17, а не в 3:00: в 3:00 на VPS одновременно просыпаются десятки
+# cron-задач, и копия получает меньше процессора.
+OnCalendar=*-*-* 03:17:00
+# Разброс в 10 минут: копия в одно и то же время не нужна, а очередь
+# на диске в 3:00 реальна.
+RandomizedDelaySec=600
+# Если машина была выключена, копия снимается при включении.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
