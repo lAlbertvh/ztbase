@@ -5,7 +5,11 @@
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
-    "test": "node test/orders-live.js",
+    "test": "node test/manipulations-unit.js && node test/orders-live.js && node test/setup-live.js && node test/chat-live.js && node test/clinics-live.js",
+    "test:unit": "node test/manipulations-unit.js",
+    "test:live": "node test/orders-live.js",
+    "test:chat": "node test/chat-live.js",
+    "test:clinics": "node test/clinics-live.js",
     "start": "node server.js",
     "build:linux": "pkg server.js --targets node22-linux-x64 --output dist/exo-linux",
     "build:win": "pkg server.js --targets node22-win-x64 --output dist/exo-win.exe",
@@ -35,7 +39,8 @@
     "exceljs": "4.4.0",
     "express": "5.2.1",
     "express-session": "1.19.0",
-    "multer": "2.0.2"
+    "multer": "2.4.0",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
     "@yao-pkg/pkg": "6.14.2"
