@@ -56,10 +56,15 @@ if command -v nginx >/dev/null 2>&1; then
   else
     bad "конфигурация nginx битая. nginx -t"
   fi
-  if curl -s --max-time 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1/health" | grep -q '^200$'; then
-    ok "nginx достучился до приложения через upstream"
+  # Обращаемся к 127.0.0.1, но с правильным Host: блоки nginx описаны
+  # по именам ztbase.ru и www.ztbase.ru, и запрос с Host=127.0.0.1 не
+  # попадает ни в один из них — попадёт в лендинг и вернёт 404, хотя
+  # приложение живо и на www отвечает 200.
+  if curl -s --max-time 5 -o /dev/null -w '%{http_code}' -H "Host: ${WWW}" \
+       "http://127.0.0.1/health" | grep -q '^200$'; then
+    ok "nginx достучался до приложения через upstream"
   else
-    bad "nginx не достучился. Проверьте upstream в /etc/nginx/sites-enabled/ztlab"
+    bad "nginx не достучался. Проверьте upstream в /etc/nginx/sites-enabled/ztlab"
   fi
 else
   printf '  пропуск: nginx на этой машине нет\n'
@@ -94,7 +99,10 @@ info "5. Вход в боевом режиме (самое частое мест
 # Если nginx не передаёт X-Forwarded-Proto, или в приложении выключен
 # trust proxy, то cookie с флагом Secure не выдаётся — и пользователь
 # упирается в бесконечное возвращение на /login. Проверяем это прямо.
-BODY=$(curl -s --max-time 10 -X POST "https://${DOMAIN}/set-user" \
+# Проверять вход надо на www, а не на голом домене: на голом домене
+# nginx отдаёт статический лендинг и маршрута /set-user там просто нет,
+# поэтому проверка ругалась бы на cookie, не проверив ничего.
+BODY=$(curl -s --max-time 10 -X POST "https://${WWW}/set-user" \
         -H 'Content-Type: application/x-www-form-urlencoded' \
         --data-urlencode 'lab_slug=проверка' \
         --data-urlencode 'username=нет' \
