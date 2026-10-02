@@ -34,7 +34,10 @@ module.exports = function createSetupRoutes({ db, requireAdmin, hashPassword }) 
     router.get('/', (req, res) => {
       if (!S.setupPending(db, own(req))) return res.redirect('/orders');
       const lab = db.prepare('SELECT * FROM labs WHERE id = ?').get(own(req));
-      res.render('setup/welcome', { lab, ownerName: lab.owner_name || '' });
+      res.render('setup/welcome', { lab, ownerName: lab.owner_name || '', notice: res.locals.notice });
+      // Сообщение после регистрации показываем один раз: на этом экране
+      // пользователь оказывается сразу после регистрации.
+      delete req.session.notice;
     });
 
     // Пропуск настройки. Раньше кнопка вела прямо в /orders, а middleware

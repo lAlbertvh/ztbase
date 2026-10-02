@@ -385,6 +385,14 @@ app.use(session({
   }
 }));
 
+// Сообщение после регистрации показываем один экран: на первом экране
+// настройки и на хабе. Именно настройку новичок видит сразу после
+// регистрации, а хаб — много позже, поэтому одного из двух мало.
+app.use((req, res, next) => {
+  res.locals.notice = req.session.notice || null;
+  next();
+});
+
 // Браузер не должен сохранять страницы с заказами на диск: после выхода
 // из аккаунта данные остались бы в кэше и могли бы попасть в поле зрения
 // следующего сотрудника на том же компьютере.
@@ -881,16 +889,31 @@ app.post('/trial/renew', (req, res) => {
     const labName = (req.body.lab_name || '').trim();
     const userName = (req.body.username || '').trim();
     const password = req.body.password || '';
-  
-    if (!labName) return res.status(400).send('Укажите название лаборатории');
-    if (!userName) return res.status(400).send('Укажите имя пользователя');
-    if (password.length < 6) return res.status(400).send('Пароль короче 6 символов');
 
-    // Контакт обязателен: без него пробный период нечем продлить, а
-    // человек после недели не понимает, куда писать. Это персональные
-    // данные, поэтому форма регистрации ссылается на политику.
+    // Ошибку показываем на самой форме, а не голым текстом: раньше
+    // res.send() отдавал пустую страницу, и человек терял всё, что уже
+    // набрал, и не понимал, к какому полю претензия.
+    const fail = (message, status = 400) => res.status(status).render('register', {
+      error: message,
+      form: {
+        lab_name: req.body.lab_name || '',
+        slug: req.body.slug || '',
+        username: req.body.username || '',
+        email: req.body.email || '',
+        phone: req.body.phone || '',
+      },
+    });
+
+    if (!labName) return fail('Укажите название лаборатории');
+    if (!userName) return fail('Укажите имя пользователя');
+    if (password.length < 6) return fail('Пароль короче 6 символов');
+
+    // Обязателен только e-mail: без него пробный период нечем продлить,
+    // а человек после недели не понимает, куда писать. Телефон необязателен
+    // и ошибку его разбора регистрации не роняет. Это персональные данные,
+    // поэтому форма регистрации ссылается на политику.
     const contact = TRIAL.validateContact(req.body.email, req.body.phone);
-    if (!contact.ok) return res.status(400).send(contact.error);
+    if (!contact.ok) return fail(contact.error);
   
     try {
     let slug = (req.body.slug || '').trim().toLowerCase()
@@ -900,7 +923,7 @@ app.post('/trial/renew', (req, res) => {
 
     const exists = query('SELECT id FROM labs WHERE slug = ?', [slug]).rows;
     if (exists.length > 0) {
-      return res.status(409).send('Такая лаборатория уже зарегистрирована');
+      return fail('Такая лаборатория уже зарегистрирована', 409);
     }
 
       // Пробный период начинается сразу: неделя отсчитывается от даты
@@ -931,6 +954,9 @@ app.post('/trial/renew', (req, res) => {
       req.session.labId = labId;
       req.session.role = 'admin';
     req.session.labSlug = slug;
+    // Телефон мог не распознаться. На следующей странице один раз
+    // покажем это и снимем, иначе сообщение так и не появится.
+    if (contact.warning) req.session.notice = contact.warning;
     res.redirect('/');
   } catch (err) {
     console.error(err);
@@ -985,7 +1011,11 @@ app.get('/', (req, res) => {
     counters: { orders, files, unread },
     usage: isAdmin ? license.usage(db, labId) : null,
     setupPendingHere: isAdmin && setupPending(db, labId),
+    // Сообщение после регистрации показываем один раз и сразу снимаем:
+    // иначе оно висело бы на хабе до конца сессии.
+    notice: req.session.notice || null,
   });
+  if (req.session.notice) delete req.session.notice;
 });
 
 // Обмен файлами. Раньше этот экран занимал '/', и из-за него навигация

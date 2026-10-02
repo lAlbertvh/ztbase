@@ -48,19 +48,70 @@ function trialDaysLeft(db, labId) {
   return Math.ceil(ms / 86400000);
 }
 
-// Минимально разумная проверка контакта. Строгая валидация телефона и
-// e-mail здесь была бы формой вежливости: настоящая проверка случается при
-// попытке связаться, а сейчас нам нужно лишь отсечь пустое поле и мусор.
+// Минимально разумная проверка e-mail. Строгая валидация здесь была бы
+// формой вежливости: настоящая проверка случается при попытке связаться,
+// а сейчас нам нужно лишь отсечь пустое поле и мусор.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const PHONE_RE = /^[+()\d][\d\s()+-]{8,24}$/;
+
+// Телефон по формату не проверяем и регистрацию из-за него не роняем.
+// Поле необязательное, а номер берут откуда угодно: из мессенджера с
+// длинным тире, с «тел.», с «доб.» или сразу два номера через запятую.
+// Раньше такой набор символов не проходил регулярное выражение, и вся
+// регистрация отваливалась с сообщением, на которое нельзя было
+// повлиять, хотя e-mail для продления пробного периода уже есть и его
+// достаточно. Необязательное поле не должно быть барьером.
+//
+// Поэтому собираем цифры, всё остальное отбрасываем. Номер в E.164 —
+// не длиннее 15 цифр; если цифр больше, значит в поле вставили сразу
+// два номера или текст, и молча склеивать их в один нельзя: такой
+// «телефон» потом не набрать. Тогда берём первый настоящий номер.
+// Цифр меньше пяти — телефона фактически не было: он не сохраняется,
+// и об этом честно сообщаем в warning, а не теряем молча.
+const PHONE_MIN_DIGITS = 5;
+const PHONE_MAX_DIGITS = 15;
+
+// Разделители, которыми люди отделяют второй номер или слово.
+const PHONE_SPLIT_RE = /[,;/|]| или | и |\s{2,}/i;
+
+// «доб. 5», «ext 12», «#3» — добавочный номер цифрами к основному не
+// относится, и вместе с ним основной перестаёт быть номером. Отрезаем
+// хвост до разбора, иначе «+7 900 000-00-00 доб. 5» не прошёл бы.
+const PHONE_EXT_RE = /\s*(?:(?:доб|ext|д)\.?|#)\s*\d*\s*$/i;
+
+function normalizePhone(raw) {
+  const source = String(raw || '').trim();
+  if (!source) return { phone: null, warning: '' };
+
+  const withoutExt = source.replace(PHONE_EXT_RE, '').trim() || source;
+  const digits = withoutExt.replace(/\D/g, '');
+  if (digits.length >= PHONE_MIN_DIGITS && digits.length <= PHONE_MAX_DIGITS) {
+    return { phone: (withoutExt.startsWith('+') ? '+' : '') + digits, warning: '' };
+  }
+
+  // Слишком много цифр: пробуем взять первый номер из кусков, на которые
+  // поле естественно распадается.
+  if (digits.length > PHONE_MAX_DIGITS) {
+    for (const part of withoutExt.split(PHONE_SPLIT_RE)) {
+      const partDigits = part.replace(/\D/g, '');
+      if (partDigits.length >= PHONE_MIN_DIGITS && partDigits.length <= PHONE_MAX_DIGITS) {
+        return { phone: (part.trim().startsWith('+') ? '+' : '') + partDigits, warning: '' };
+      }
+    }
+  }
+
+  return {
+    phone: null,
+    warning: 'Телефон не распознан, сохранили только e-mail. Номер можно указать цифрами, вместе с кодом страны.',
+  };
+}
 
 function validateContact(email, phone) {
   const mail = String(email || '').trim();
-  const tel = String(phone || '').trim();
   if (!mail) return { ok: false, error: 'Укажите e-mail' };
   if (!EMAIL_RE.test(mail)) return { ok: false, error: 'E-mail выглядит неверно' };
-  if (tel && !PHONE_RE.test(tel)) return { ok: false, error: 'Телефон выглядит неверно' };
-  return { ok: true, email: mail, phone: tel || null };
+
+  const normalized = normalizePhone(phone);
+  return { ok: true, email: mail, phone: normalized.phone, warning: normalized.warning };
 }
 
 module.exports = { TRIAL_DAYS, trialUntil, trialExpired, trialDaysLeft, validateContact };

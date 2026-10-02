@@ -208,21 +208,42 @@ async function waitReady(timeoutMs = 25000) {
         lab_name: 'Кривая почта', slug: 'krivaya', username: 'Кто-то', password: 'Пароль123',
         email: 'не-почта',
       })).status === 400);
-      check('регистрация с кривым телефоном отклоняется', (await req('POST', '/register-lab', {
+      // Необязательный телефон не должен быть барьером: раньше такая
+      // регистрация отваливалась, хотя e-mail для продления пробного
+      // периода уже есть и его достаточно.
+      check('регистрация с нечитаемым телефоном проходит', (await req('POST', '/register-lab', {
         lab_name: 'Кривой телефон', slug: 'krivoitel', username: 'Кто-то', password: 'Пароль123',
         email: 'lab@example.com', phone: 'не-телефон',
-      })).status === 400);
+      })).status === 302);
+
+      check('нечитаемый телефон не попадает в базу', (() => {
+        const lab = testDb.prepare('SELECT trial_email, trial_phone FROM labs WHERE slug = ?').get('krivoitel');
+        return Boolean(lab) && lab.trial_email === 'lab@example.com' && !lab.trial_phone;
+      })());
 
       check('регистрация лаборатории', (await req('POST', '/register-lab', {
         lab_name: 'Тест Лаб', slug: 'testlab', username: 'Админ', password: 'Пароль123',
         email: 'lab@example.com', phone: '+7 900 000-00-00',
       })).status === 302);
+
+      // Тот же ввод, но в чужом написании: длинное тире и «доб.» —
+      // как из мессенджера. Сохраняться должны цифры.
+      check('лаборатория регистрируется с телефоном в чужом написании', (await req('POST', '/register-lab', {
+        lab_name: 'Кривой телефон 2', slug: 'krivoitel2', username: 'Кто-то', password: 'Пароль123',
+        email: 'lab@example.com', phone: '+7 (923) 483–65–94 доб. 5',
+      })).status === 302);
+
+      check('телефон сохраняется цифрами, а не как введён', (() => {
+        const lab = testDb.prepare('SELECT trial_phone FROM labs WHERE slug = ?').get('krivoitel2');
+        return Boolean(lab) && lab.trial_phone === '+79234836594';
+      })());
+
       check('пробный период назначен на неделю', (() => {
         const lab = testDb.prepare('SELECT trial_until, trial_email, trial_phone FROM labs WHERE slug = ?').get('testlab');
         if (!lab || !lab.trial_until) return false;
         const days = (Date.parse(lab.trial_until) - Date.now()) / 86400000;
         return days > 6.5 && days <= 7
-          && lab.trial_email === 'lab@example.com' && lab.trial_phone === '+7 900 000-00-00';
+          && lab.trial_email === 'lab@example.com' && lab.trial_phone === '+79000000000';
       })());
   check('вход сотрудника', (await req('POST', '/set-user', {
         lab_slug: 'testlab', username: 'Админ', password: 'Пароль123',
@@ -620,9 +641,14 @@ check('регистрация второй лаборатории', other.status
       const salt = crypto.randomBytes(16).toString('hex');
       const dentistHash = 'scrypt$' + salt + '$' +
         crypto.scryptSync('Пароль123', salt, 64).toString('hex');
+      // Номер лаборатории берём по адресу, а не константой: любая лишняя
+      // успешная регистрация выше по файлу сдвигает нумерацию, и врач
+      // молча оказывался бы в чужой лаборатории — проверка падала бы с
+      // «HTTP 302» и выглядела бы совсем не про то.
+      const dentistLabId = testDb.prepare('SELECT id FROM labs WHERE slug = ?').get('testlab').id;
       testDb.prepare(
         'INSERT INTO users (name, password_hash, role, active, lab_id) VALUES (?,?,?,1,?)'
-      ).run('Стоматолог', dentistHash, 'dentist', 2);
+      ).run('Стоматолог', dentistHash, 'dentist', dentistLabId);
 
       cookie = '';
       await req('POST', '/set-user', {

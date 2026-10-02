@@ -18,6 +18,7 @@
         button:hover { background: #45a049; }
         .muted { color: #777; font-size: 13px; text-align: center; margin-top: 18px; }
         .muted a { color: #4CAF50; }
+        .error { background: #ffebee; color: #c62828; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 14px; }
         label { font-size: 13px; color: #555; display: block; margin-bottom: 2px; }
         /* Предупреждение о пробном периоде — заметное, но не тревожное:
            человек должен увидеть срок до регистрации, а не после. */
@@ -45,21 +46,36 @@
         </div>
 
         <form method="post" action="/register-lab">
+            <%# Ошибка показывается здесь же, а не отдельной страницей:
+                иначе форма пропадает и всё набранное — тоже. %>
+            <% if (typeof error !== 'undefined' && error) { %>
+                <div class="error"><%= error %></div>
+            <% } %>
+
             <label for="lab_name">Название лаборатории</label>
-            <input type="text" id="lab_name" name="lab_name" required placeholder="Зуботехническая лаборатория">
+            <input type="text" id="lab_name" name="lab_name" required placeholder="Зуботехническая лаборатория"
+                   value="<%= (typeof form !== 'undefined' && form && form.lab_name) ? form.lab_name : '' %>">
 
             <label for="slug">Адрес в системе (латиницей)</label>
-            <input type="text" id="slug" name="slug" placeholder="lab-ivanova">
+            <input type="text" id="slug" name="slug" placeholder="lab-ivanova"
+                   value="<%= (typeof form !== 'undefined' && form && form.slug) ? form.slug : '' %>">
 
             <label for="username">Ваше имя</label>
-            <input type="text" id="username" name="username" required autocomplete="username">
+            <input type="text" id="username" name="username" required autocomplete="username"
+                   value="<%= (typeof form !== 'undefined' && form && form.username) ? form.username : '' %>">
 
             <label for="email">E-mail</label>
-            <input type="email" id="email" name="email" required autocomplete="email" placeholder="ivanova@mail.ru">
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="ivanova@mail.ru"
+                   value="<%= (typeof form !== 'undefined' && form && form.email) ? form.email : '' %>">
             <p class="hint">На него придёт напоминание об окончании пробного периода.</p>
 
             <label for="phone">Телефон <span style="color:#999">(необязательно)</span></label>
-            <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="+7 900 000-00-00">
+            <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="+7 900 000-00-00"
+                   value="<%= (typeof form !== 'undefined' && form && form.phone) ? form.phone : '' %>">
+            <p class="hint">Номер нужен, только чтобы продлить пробный период.
+                На регистрацию не влияет: в любом написании, даже с «тел.» или
+                «доб.», мы сохраним цифры, а если номер разобрать не выйдет —
+                обойдёмся одним e-mail.</p>
 
             <label for="password">Пароль (не короче 6 символов)</label>
             <input type="password" id="password" name="password" required minlength="6" autocomplete="new-password">
