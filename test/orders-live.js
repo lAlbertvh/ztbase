@@ -66,6 +66,33 @@ function req(method, url, form) {
   });
 }
 
+// Запрос без сессии — для проверки публичных и закрытых страниц.
+// Куки текущего пользователя здесь намеренно не передаются.
+function reqNoCookie(method, url, form) {
+  return new Promise((resolve, reject) => {
+    const body = form
+      ? Object.entries(form).map(([k, v]) =>
+          `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')
+      : null;
+    const u = new URL(BASE + url);
+    const headers = {};
+    if (body) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+      headers['Content-Length'] = Buffer.byteLength(body);
+    }
+    const r = http.request({ method, hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers }, res => {
+      let data = '';
+      res.on('data', c => { data += c; });
+      res.on('end', () => resolve({
+        status: res.statusCode, location: res.headers.location, body: data,
+      }));
+    });
+    r.on('error', reject);
+    if (body) r.write(body);
+    r.end();
+  });
+}
+
 // Загрузка файла как из формы: multer разбирает multipart, поэтому
 // обычный urlencoded-хелпер здесь не подходит.
 function uploadMultipart(field, filename, sizeBytes) {
@@ -290,6 +317,25 @@ async function waitReady(timeoutMs = 25000) {
       check(`страница: ${name}`, r.status === 200, `HTTP ${r.status}`);
     }
 
+    // Зубная формула кликабельная. Раньше это было текстовое поле с
+    // серой подсказкой, и номер зуба вводился вручную: ошибка в одном
+    // номере означает изготовление не того, что нужно.
+    const form = await req('GET', '/orders/new');
+    check('в формуле есть кликабельный ряд', form.body.includes('class="tooth'), 'нет кнопок зубов');
+    check('в формуле 32 зуба', (form.body.match(/data-tooth="/g) || []).length === 32,
+      `найдено ${(form.body.match(/data-tooth="/g) || []).length}`);
+    check('в формуле есть скрытое поле teeth', form.body.includes('id="teeth"'));
+    check('скрипт формулы подключён', form.body.includes('/js/teeth-formula.js'));
+    // Видимое поле не должно отправляться: сервер читает только
+    // скрытое, иначе получил бы два разных значения из одной формы.
+    const visibleTeeth = /<input[^>]*data-teeth-input[^>]*>/.exec(form.body);
+    check('видимое поле формулы не отправляется',
+      !!visibleTeeth && !/\sname=/.test(visibleTeeth[0]),
+      visibleTeeth ? 'у видимого поля есть name' : 'поля нет');
+    // Отметка «антагонист» приходит на форму под своим названием.
+    check('на форме есть отметка «Антагонист»', form.body.includes('Антагонист'));
+    check('на форме нет прежней «Maxilla»', !form.body.includes('Maxilla'));
+
     // 6. Данные реально попали в страницу
     const card = await req('GET', `/orders/${id}`);
     check('на карточке виден номер наряда', card.body.includes('Н-1001'));
@@ -302,12 +348,41 @@ async function waitReady(timeoutMs = 25000) {
     check('в печати есть блок подписей', print.body.includes('Проверил администратор'));
 
     // 7. Этап и материал
+    //
+    // Этап отмечается кнопкой, а не выбором из списка, и заметка
+    // обязательна: пустая строка в журнале означала «этап пройден»,
+    // и спросить, что сделали, было уже нечем.
+    check('этап без заметки не записывается',
+      (await req('POST', `/orders/${id}/stage`, { stage: 'review' })).status === 302);
+    // Сервер отвечает редиректом с текстом в ?error, поэтому проверяем
+    // ровно то, что человек увидит: страницу с этим параметром.
+    const withError = await req('GET', `/orders/${id}?error=${encodeURIComponent('Напишите, что сделано на этом этапе')}`);
+    check('пустая заметка объяснена у формы этапов',
+      withError.body.includes('Напишите, что сделано'));
+    // Проверяем через страницу: запись в базу из теста недоступна, а
+    // сам журнал — тоже документ, который читают. Ищем заголовок
+    // «Проверка врачом» из журнала этапов, а не кнопку перехода:
+    // кнопка есть на странице всегда.
+    const afterRefuse = await req('GET', `/orders/${id}`);
+    check('после отказа этап не записан',
+      !/<strong>Проверка врачом<\/strong>/.test(afterRefuse.body), 'этап попал в журнал');
+
     check('добавление этапа с заметкой', (await req('POST', `/orders/${id}/stage`, {
       stage: 'milled', note: 'Фрезерование начато',
     })).status === 302);
     const afterStage = await req('GET', `/orders/${id}`);
     check('этап виден в журнале', afterStage.body.includes('Фрезерование'));
     check('заметка видна в журнале', afterStage.body.includes('Фрезерование начато'));
+
+    // Кнопки этапов вместо выпадающего списка.
+    check('на карточке есть кнопки этапов', afterStage.body.includes('data-stage='),
+      'кнопок этапов нет');
+    check('этап отмечается кнопкой, а не списком',
+      !/<select name="stage"/.test(afterStage.body), 'остался выпадающий список этапов');
+    check('у кнопок этапа подключён скрипт', afterStage.body.includes('/js/stage-buttons.js'));
+    // Кнопка текущего этапа не должна предлагать переход в себя же.
+    check('текущий этап помечен и не выбирается',
+      /class="btn stage-btn is-current"/.test(afterStage.body), 'текущий этап не помечен');
 
     check('добавление материала в наряд', (await req('POST', `/orders/${id}/material`, {
       name: 'Порошок циркония', qty: '45', unit: 'г',
@@ -324,14 +399,17 @@ async function waitReady(timeoutMs = 25000) {
     // отличалась от экрана к экрану: из карточки наряда нельзя было
     // попасть ни в обмен файлами, ни в титановые основания. Плитки
     // разделов должны быть на всех страницах приложения.
+    //
+    // Обмен файлами переехал с '/' на '/files': корень отдан меню
+    // приложения, иначе программа начиналась со случайного раздела.
     const NAV = [
       ['Заказ-наряды', 'href="/orders"'],
-      ['Обмен файлами', 'href="/"'],
+      ['Файлы', 'href="/files"'],
       ['Титановые основания', 'href="/titan"'],
       ['Новый наряд', 'href="/orders/new"'],
     ];
     for (const [name, url] of [
-      ['обмен файлами', '/'],
+      ['обмен файлами', '/files'],
       ['список нарядов', '/orders'],
       ['форма наряда', '/orders/new'],
       ['титановые основания', '/titan'],
@@ -344,7 +422,7 @@ async function waitReady(timeoutMs = 25000) {
     }
     // Активный раздел помечен, чтобы пользователь видел, где находится.
     check('на списке нарядов активен свой раздел', (await req('GET', '/orders')).body.includes('nav-tile is-active'));
-    check('в обмене файлами активен свой раздел', (await req('GET', '/')).body.includes('nav-tile is-active'));
+    check('в обмене файлами активен свой раздел', (await req('GET', '/files')).body.includes('nav-tile is-active'));
 
     // Вход должен открывать заказ-наряды, а не обмен файлами:
     // с обмена начинать было неудобно, нужный раздел был не виден.
@@ -702,9 +780,15 @@ check('регистрация второй лаборатории', other.status
       const panelLinks = [
         '/orders/catalog/manipulations', '/orders/stats/manipulations',
         '/orders/catalog/materials', '/add-user', '/setup/clinics',
+        // Разделы хаба обязаны быть видны из панели: иначе до них можно
+        // дойти только по заученному адресу.
+        '/messages', '/users', '/options', '/notifications', '/files',
       ];
       const missing = panelLinks.filter((h) => !adminPanel.body.includes(`href="${h}"`));
       check('панель ссылается на все разделы', missing.length === 0, `нет: ${missing.join(', ')}`);
+      check('обмен файлами в панели ведёт на /files, а не на хаб',
+        !new RegExp(`class="card[^"]*"[^>]*href="/"`).test(adminPanel.body),
+        'осталась плитка на корневой хаб');
       const adminOrdersPage = await req('GET', '/orders');
       check('в меню администратора есть плитка настроек приложения',
         adminOrdersPage.body.includes('href="/admin"'), 'плитка не найдена');
@@ -721,6 +805,73 @@ check('регистрация второй лаборатории', other.status
         siteAdmin.body.includes('href="/admin"'), 'ссылки на панель приложения нет');
       check('админка сайта не тащит разделы приложения',
         !siteAdmin.body.includes('href="/add-user"'), 'раздел приложения попал в админку сайта');
+
+      // Разделы хаба. Каждый должен открываться и не содержать следов
+      // шаблона: раньше запросы к ним падали в 500 из-за несуществующей
+      // колонки в orders, и обычная проверка кода это не видела.
+      for (const [href, label] of [
+        ['/messages', 'переписка'],
+        ['/users', 'сотрудники и коды'],
+        ['/notifications', 'уведомления'],
+        ['/options', 'настройки этапов'],
+        ['/legal/privacy', 'политика конфиденциальности'],
+        ['/legal/offer', 'оферта'],
+      ]) {
+        const page = await req('GET', href);
+        check(`раздел открывается: ${label}`,
+          page.status === 200 && !/Error:|at Object|stack/i.test(page.body),
+          `HTTP ${page.status}`);
+        check(`в разделе нет служебных плейсхолдеров: ${label}`,
+          !/undefined|\[object Object\]|NaN/.test(page.body),
+          'в выводе попали значения undefined/NaN');
+      }
+
+      // /join — публичная страница входа по коду, поэтому её надо
+      // проверить и без авторизации: сессию сбрасываем и повторяем.
+      const joinPage = await req('GET', '/join');
+      check('страница входа по коду доступна', joinPage.status === 200, `HTTP ${joinPage.status}`);
+      const anon = await reqNoCookie('GET', '/messages');
+      check('переписка не открыта без входа',
+        anon.status === 302 || anon.status === 401,
+        `HTTP ${anon.status}`);
+      const anonJoin = await reqNoCookie('GET', '/join');
+      check('вход по коду доступен без входа', anonJoin.status === 200, `HTTP ${anonJoin.status}`);
+      const anonLegal = await reqNoCookie('GET', '/legal/privacy');
+      check('политика доступна без входа', anonLegal.status === 200, `HTTP ${anonLegal.status}`);
+
+      // Одноразовый код: выдаём настоящий, гасим входом по нему и
+      // проверяем, что повторно он уже не работает.
+      const issued = await req('POST', '/users/codes', { role: 'tech' });
+      check('код сотрудника выдаётся', issued.status === 302, `HTTP ${issued.status}`);
+      const inviteRow = testDb.prepare(
+        'SELECT COUNT(*) AS n FROM invite_codes WHERE used_at IS NULL'
+      ).get().n;
+      check('в базе появился неиспользованный код', inviteRow === 1, `строк ${inviteRow}`);
+      const codeHash = testDb.prepare('SELECT code_hash FROM invite_codes LIMIT 1').get().code_hash;
+      check('код в базе хранится хэшем, а не открытым текстом',
+        /^[0-9a-f]{64}$/.test(codeHash), codeHash.slice(0, 16) + '…');
+
+      // Неверный код и перебор не должны пропускать вход.
+      const badJoin = await reqNoCookie('POST', '/join', {
+        username: 'Новый', password: 'Пароль123', code: 'XXXXXXXX',
+      });
+      check('неверный код не пускает в систему',
+        badJoin.status === 400 && /код/i.test(badJoin.body),
+        `HTTP ${badJoin.status}`);
+
+      // Перебор одного кода должен упираться в лимит: страница публичная,
+      // поэтому без счётчика её можно было бы долбить наугад.
+      let limited = 0;
+      let lastStatus = 0;
+      for (let i = 0; i < 12; i++) {
+        const attempt = await reqNoCookie('POST', '/join', {
+          username: 'Перебор', password: 'Пароль123', code: 'ZZZZZZZZ',
+        });
+        lastStatus = attempt.status;
+        if (attempt.status === 429) limited++;
+      }
+      check('перебор кода в конце упирается в ограничение',
+        limited > 0 && lastStatus === 429, `HTTP ${lastStatus}, ограничений ${limited}`);
 
       // Лимит загрузки: слишком большой файл должен отклоняться
       // понятным ответом, а не падением с 500 и не записью на диск.

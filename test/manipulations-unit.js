@@ -23,22 +23,12 @@ function makeDb() {
     CREATE TABLE orders (id INTEGER PRIMARY KEY, lab_id INTEGER, order_number TEXT);
     CREATE TABLE order_teeth (id INTEGER PRIMARY KEY, lab_id INTEGER,
                               order_id INTEGER, kind TEXT);
-    CREATE TABLE manipulations (
-      id INTEGER PRIMARY KEY, lab_id INTEGER, code TEXT, name TEXT,
-      work_kind TEXT, price REAL, active INTEGER DEFAULT 1, sort INTEGER,
-      UNIQUE (lab_id, code)
-    );
-    CREATE TABLE order_manipulations (
-      id INTEGER PRIMARY KEY, order_id INTEGER, lab_id INTEGER,
-      manipulation_id INTEGER, code TEXT, name TEXT, price REAL,
-      done INTEGER DEFAULT 0, done_at TEXT, done_by TEXT
-    );
-    CREATE TABLE manipulation_log (
-      id INTEGER PRIMARY KEY, order_id INTEGER, lab_id INTEGER,
-      order_number TEXT, work_kind TEXT, code TEXT, name TEXT, price REAL,
-      user TEXT, target_user TEXT, action TEXT, created_at TEXT
-    );
   `);
+  // Схему манипуляций берём настоящей миграцией, а не переписываем
+  // руками: ручная копия однажды разошлась с кодом (не хватало колонки
+  // note), и проверка падала на ошибке «такой таблицы нет».
+  require(path.join(__dirname, '..', 'src', 'db', 'manipulations-schema'))
+    .migrateManipulations(db);
   return db;
 }
 
@@ -255,6 +245,61 @@ const db = makeDb();
     check('своя конструкция хранит обе цены',
       c && c.price === 4000 && c.price_tech === 1500, JSON.stringify(c));
   }
+
+  // --- Обязательные манипуляции: подсветка, не блокировка ----------------
+//
+// Пользователь выбрал вариант «только подсветить»: неотмеченные
+// обязательные видны в чек-листе, но наряд можно выпустить. Проверяем
+// именно это — раньше обязательности не было вовсе.
+{
+  // Своя лаборатория: у остальных блоков в справочнике уже есть позиции,
+  // и счётчик пропусков считал бы их вместе с проверяемыми.
+  const lab = 40;
+  M.createCatalogItem(db, lab, { code: 'MUST', name: 'Обязательный шаг', price: 100 });
+  M.createCatalogItem(db, lab, { code: 'MAYBE', name: 'Необязательный шаг', price: 100, required: false });
+
+  const { oid } = addOrder(db, lab, 'A', 500);
+  db.prepare("INSERT INTO order_teeth (order_id, lab_id, kind) VALUES (?, ?, 'crown')").run(oid, lab);
+  M.addCatalogToOrder(db, lab, oid, ['crown']);
+
+  const items = M.listOrderManipulations(db, lab, oid);
+  const must = items.find((i) => i.code === 'MUST');
+  const maybe = items.find((i) => i.code === 'MAYBE');
+  check('в наряд попала обязательная позиция', !!must, 'нет MUST');
+  check('в наряд попала необязательная позиция', !!maybe, 'нет MAYBE');
+  check('признак обязательности скопирован в наряд',
+    must && maybe && must.required === 1 && maybe.required === 0,
+    `must=${must?.required} maybe=${maybe?.required}`);
+
+  const counts = M.orderManipulationCounts(db, lab, oid);
+  // Обязательных в наряде две: позиция из addOrder и MUST. MAYBE в счёт
+  // не входит — иначе подсветка показывала бы необязательную работу
+  // как пропущенную, и её пришлось бы отмечать из-под руки.
+  const requiredTotal = items.filter((i) => i.required === 1).length;
+  check('неотмеченные обязательные посчитаны',
+    counts.missingRequired === requiredTotal,
+    `получено ${counts.missingRequired}, обязательных ${requiredTotal}`);
+  check('необязательная в пропуски не попала',
+    !items.filter((i) => i.required === 1).some((i) => i.code === 'MAYBE'),
+    'MAYBE посчитан как обязательный');
+  check('пропуск виден, но не мешает считать всего',
+    counts.total === items.length, `total=${counts.total} items=${items.length}`);
+
+  // Снятие обязательности в справочнике не должно менять уже созданный
+  // наряд: условия работы фиксируются на момент поступления заказа.
+  M.updateCatalogItem(db, lab, must.manipulation_id,
+    { name: must.name, price: 100, required: false });
+  const after = M.listOrderManipulations(db, lab, oid).find((i) => i.code === 'MUST');
+  check('правка справочника не меняет прошлый наряд', after.required === 1,
+    `получено ${after.required}`);
+
+  // Отмечаем все обязательные — только тогда пропусков не остаётся.
+  for (const i of items.filter((x) => x.required === 1)) {
+    M.setManipulationDone(db, lab, oid, i.id, true, 'Техник');
+  }
+  check('после отметки пропусков не осталось',
+    M.orderManipulationCounts(db, lab, oid).missingRequired === 0);
+}
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n  Итог: успешно ${results.length - failed.length} из ${results.length}`);
