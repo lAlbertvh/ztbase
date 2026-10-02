@@ -31,6 +31,36 @@ function localPathFor(key) {
   return path.join(uploadDir, key);
 }
 
+// Папка лаборатории. Это то же разделение, что и в keyFor, только без
+// имени файла: по ней считается занятое место в квоте.
+function labDir(labId) {
+  return path.join(uploadDir, String(labId));
+}
+
+// Сумма размеров файлов в папке лаборатории.
+//
+// Считаем по диску, а не по таблице files: в ней нет колонки размера,
+// а на диске лежат ещё и «осиротевшие» файлы — загруженные, но без
+// записи в базе. Для ограничения диска важно видеть и их.
+//
+// Ошибку чтения не глотаем: если посчитать не удалось, молчаливый ноль
+// разрешил бы загрузить файлы в забитый диск. Лучше отказать в загрузке.
+async function dirSize(dir) {
+  let total = 0;
+  const entries = await fsp.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += await dirSize(full);
+    } else if (entry.isFile()) {
+      total += (await fsp.stat(full)).size;
+    }
+    // Симлинки пропускаем: stat по ссылке мог бы уйти за пределы
+    // хранилища и посчитать чужой файл дважды.
+  }
+  return total;
+}
+
 // ------ Локальный диск ------
 const localBackend = {
   async put(tmpPath, labId, fileName) {
@@ -93,6 +123,17 @@ const localBackend = {
   // Поток для пересчёта размера при удалении старых файлов.
   async createReadStream(labId, fileName) {
     return fs.createReadStream(await this.pathFor(labId, fileName));
+  },
+
+  // Занятое место лаборатории — для квоты (src/services/quota.js).
+  async usage(labId) {
+    try {
+      return await dirSize(labDir(labId));
+    } catch (e) {
+      // Нет папки — лаборатория ещё ничего не загружала.
+      if (e.code === 'ENOENT') return 0;
+      throw e;
+    }
   }
 };
 
@@ -189,6 +230,26 @@ const s3Backend = {
     const key = keyFor(labId, fileName).split(path.sep).join('/');
     const r = await getS3().send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
     return r.Body;
+  },
+
+  // Занятое место считаем листингом по префиксу лаборатории. Страницы
+  // перебираем циклом: у бакета может быть больше 1000 объектов, и
+  // сумма только первой страницы занизила бы занятое место.
+  async usage(labId) {
+    const { ListObjectsV2Command } = require('@aws-sdk/client-s3');
+    const prefix = `${String(labId)}/`;
+    let bytes = 0;
+    let token;
+    do {
+      const r = await getS3().send(new ListObjectsV2Command({
+        Bucket: process.env.S3_BUCKET,
+        Prefix: prefix,
+        ContinuationToken: token
+      }));
+      for (const o of r.Contents || []) bytes += o.Size || 0;
+      token = r.IsTruncated ? r.NextContinuationToken : undefined;
+    } while (token);
+    return bytes;
   }
 };
 

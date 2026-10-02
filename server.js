@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const { storage, uniqueName, BACKEND } = require('./src/services/storage');
+const quota = require('./src/services/quota');
 const SqliteStore = require('./src/services/session-store');
 const { migrateOrders } = require('./src/db/orders-schema');
 const { migrateManipulations } = require('./src/db/manipulations-schema');
@@ -1046,6 +1047,18 @@ app.get('/files', async (req, res) => {
     const uploadersResult = query('SELECT DISTINCT uploader FROM files WHERE lab_id = ?', [req.session.labId || 1]);
     const uploaders = uploadersResult.rows.map(row => row.uploader);
 
+    // Занятое место показываем на странице загрузки: там человек и
+    // решает, что грузить. Обход папки дёшево, но ошибку чтения глотать
+    // нельзя — иначе вместо суммы в шаблон уехал бы ноль.
+    let storageUsage = null;
+    try {
+      storageUsage = await quota.status(labId);
+    } catch (e) {
+      // Сбой подсчёта не должен ронять страницу: загрузка всё равно
+      // получит отказ на проверке места.
+      console.error('Не удалось посчитать занятое место:', e.message);
+    }
+
     res.render('index', {
       files,
       groupedFiles,
@@ -1053,7 +1066,8 @@ app.get('/files', async (req, res) => {
       users: uploaders,
       currentUser: req.session.user,
       isAdmin: req.session.role === 'admin',
-      filters: { date, uploader, downloaded, filename }
+      filters: { date, uploader, downloaded, filename },
+      storageUsage
     });
   } catch (err) {
     console.error(err);
@@ -1091,6 +1105,16 @@ app.post('/upload', upload.fields([
   collectTmp(imageFile);
 
   try {
+    // Проверяем место ДО переноса файлов: если лимит уже выбран, файл
+    // не должен даже на секунду ложиться на диск. 507 — честный код
+    // «не хватило места», клиент покажет текст ошибки как есть.
+    const incomingBytes = stlFiles.reduce((sum, f) => sum + (f.size || 0), 0)
+      + (imageFile ? imageFile.size || 0 : 0);
+    const verdict = await quota.check({ labId, bytes: incomingBytes });
+    if (!verdict.ok) {
+      return res.status(507).send(verdict.message);
+    }
+
     // Переносим файлы из временной папки в хранилище лаборатории.
     // При STORAGE_BACKEND=s3 это единственное место, где идёт загрузка.
     let imageName = null;

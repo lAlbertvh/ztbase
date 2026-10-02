@@ -289,6 +289,17 @@
             color: #2e7d32;
             border: 1px solid #a5d6a7;
         }
+        /* Занятое место видно до загрузки, а не после отказа.
+           Ближе к концу квоты строка становится предупреждением. */
+        .storage-usage {
+            margin: -4px 0 12px;
+            font-size: 13px;
+            color: #607D8B;
+        }
+        .storage-usage.near {
+            color: #c62828;
+            font-weight: 600;
+        }
         /* ===== Адаптивность для телефонов ===== */
         @media (max-width: 768px) {
             body { margin: 10px; font-size: 14px; }
@@ -363,6 +374,13 @@
     <!-- Форма загрузки (drag-and-drop) -->
     <div class="upload-form">
         <h2>Загрузить файлы</h2>
+        <%# Подсчёт занятого места может не удаться (например, нет прав
+            на папку) — тогда строки просто нет, загрузка не ломается. %>
+        <% if (storageUsage) { %>
+            <div class="storage-usage<%= storageUsage.nearLimit ? ' near' : '' %>">
+                Занято <%= storageUsage.usedText %> из <%= storageUsage.limitText %><% if (storageUsage.freeText) { %> · <%= storageUsage.freeText %><% } %>
+            </div>
+        <% } %>
         <div id="uploadForm">
             <div class="drop-zone" id="dropZoneStl">
                 <input type="file" id="stlFileInput" style="display: none;" multiple>

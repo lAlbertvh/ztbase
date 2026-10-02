@@ -5,9 +5,11 @@
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
-    "test": "node test/manipulations-unit.js && node test/inbox-unit.js && node test/orders-live.js && node test/setup-live.js && node test/chat-live.js && node test/clinics-live.js",
-    "test:unit": "node test/manipulations-unit.js && node test/inbox-unit.js",
+    "test": "node test/manipulations-unit.js && node test/inbox-unit.js && node test/quota-unit.js && node test/orders-live.js && node test/storage-live.js && node test/setup-live.js && node test/chat-live.js && node test/clinics-live.js",
+    "test:unit": "node test/manipulations-unit.js && node test/inbox-unit.js && node test/quota-unit.js",
     "test:inbox": "node test/inbox-unit.js",
+    "test:quota": "node test/quota-unit.js",
+    "test:storage": "node test/storage-live.js",
     "test:live": "node test/orders-live.js",
     "test:chat": "node test/chat-live.js",
     "test:clinics": "node test/clinics-live.js",
