@@ -50,7 +50,8 @@ log "Готовлю каталоги"
 # приложению нельзя создать папку самой (родительский каталог
 # read-only), и mkdir на старте уронил бы сервис.
 mkdir -p "$APP_DIR" "$DATA_DIR/database" "$DATA_DIR/uploads" \
-         "$DATA_DIR/content" "$DATA_DIR/tmp-uploads" /etc/ztlab /var/backups/ztlab
+         "$DATA_DIR/content" "$DATA_DIR/content/img" "$DATA_DIR/tmp-uploads" \
+         /etc/ztlab /var/backups/ztlab
 # В бэкапах лежат хэши паролей и данные пациентов — закрываем каталог.
 # Группу ОБЯЗАТЕЛЬНО ставим ztlab: иначе копии не прочитает даже
 # владелец данных, и восстановление невозможно проверить.

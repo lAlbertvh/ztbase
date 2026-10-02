@@ -55,7 +55,8 @@ MemoryDenyWriteExecute=false
 #   uploads       — файлы 3D-моделей
 #   tmp-uploads   — промежуточные файлы при загрузке
 #   content       — редактор содержимого сайта (/admin/content)
-ReadWritePaths=/var/lib/ztlab/database /var/lib/ztlab/uploads /var/lib/ztlab/tmp-uploads /var/lib/ztlab/content
+#   content/img   — загруженные через редактор картинки
+ReadWritePaths=/var/lib/ztlab/database /var/lib/ztlab/uploads /var/lib/ztlab/tmp-uploads /var/lib/ztlab/content /var/lib/ztlab/content/img
 
 # Файлы 3D-моделей бывают крупными, но такими должны быть и загрузка,
 # и раздача. Ограничение в 2 ГБ на файл заведомо избыточно.

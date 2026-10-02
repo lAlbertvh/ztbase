@@ -367,6 +367,16 @@ app.use(session({
 
 app.use(express.static(publicDir));
 
+// Картинки, загруженные через /admin/content, лежат в каталоге данных
+// (/var/lib/ztlab/content/img), а не в папке кода: обновление через
+// deploy.sh не должно затирать загруженное, и при ProtectSystem=strict
+// в /opt вообще нельзя писать. Адрес прежний — /public/content, —
+// чтобы значения, уже сохранённые в site.json, продолжали работать.
+const contentImgDir = path.resolve(
+  process.env.CONTENT_IMG_DIR || path.join(publicDir, 'content')
+);
+app.use('/public/content', express.static(contentImgDir));
+
 // Браузер не должен сохранять страницы с заказами на диск: после выхода
 // из аккаунта данные остались бы в кэше и могли бы попасть в поле зрения
 // следующего сотрудника на том же компьютере.

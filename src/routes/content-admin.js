@@ -18,7 +18,18 @@ const router = express.Router();
 const contentImgDir = path.resolve(
   process.env.CONTENT_IMG_DIR || path.join(__dirname, '..', '..', 'public', 'content')
 );
-fs.mkdirSync(contentImgDir, { recursive: true });
+// Папку создаём, но падение на этом не роняет всё приложение. Раньше
+// mkdir шёл без защиты, и на VPS из-за отказа в доступе (ProtectSystem
+// =strict, папка кода read-only) сервис целиком уходил в цикл
+// перезапусков из-за несуществующего каталога картинок.
+try {
+  fs.mkdirSync(contentImgDir, { recursive: true });
+} catch (e) {
+  console.error(
+    `Не удалось создать папку для картинок ${contentImgDir}: ${e.message}. `
+    + 'Загрузка изображений не заработает, остальное приложение продолжит работу.'
+  );
+}
 
 // Второй слой защиты поверх входа в приложение: обычная пара логин/пароль
 // прямо в админку. Нужен потому, что раздел меняет публичный текст сайта,
