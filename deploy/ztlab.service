@@ -47,8 +47,15 @@ MemoryDenyWriteExecute=false
 # Из-за better-sqlite3 (нативный модуль) запрет исполняемой памяти
 # MemoryDenyWriteExecute оставлен выключенным: иначе Node не запустится.
 
-# Единственные папки, куда приложению можно писать.
-ReadWritePaths=/var/lib/ztlab/database /var/lib/ztlab/uploads
+# Единственные папки, куда приложению можно писать. Список обязан
+# совпадать с путями из ztlab.env: при ProtectSystem=strict всё
+# остальное read-only, и попытка создать папку или файл не там
+# падает с отказом в доступе.
+#   database      — база SQLite
+#   uploads       — файлы 3D-моделей
+#   tmp-uploads   — промежуточные файлы при загрузке
+#   content       — редактор содержимого сайта (/admin/content)
+ReadWritePaths=/var/lib/ztlab/database /var/lib/ztlab/uploads /var/lib/ztlab/tmp-uploads /var/lib/ztlab/content
 
 # Файлы 3D-моделей бывают крупными, но такими должны быть и загрузка,
 # и раздача. Ограничение в 2 ГБ на файл заведомо избыточно.
