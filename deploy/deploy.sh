@@ -82,12 +82,28 @@ log "Ставлю зависимости (npm ci берёт точные вер�
 cd "$APP_DIR"
 npm ci --omit=dev || fail "npm ci не прошёл. Чаще всего нет сети для сборки better-sqlite3 — проверьте, что установлены build-essential и python3"
 
-mkdir -p "$DATA_DIR/database" "$DATA_DIR/uploads"
+mkdir -p "$DATA_DIR/database" "$DATA_DIR/uploads" "$DATA_DIR/tmp-uploads" \
+         "$DATA_DIR/content/img"
 chown -R ztlab:ztlab "$APP_DIR" "$DATA_DIR"
 
-# --- 6. Запуск ---
+# --- 6. Юнит systemd ---
+# Юнит меняется вместе с кодом, а install-vps.sh запускают один раз.
+# Без этого шага правка в ztlab.service навсегда оставалась бы в
+# репозитории, а на сервере продолжал бы работать старый: обновление
+# рапортовало об успехе, а приложение вело себя по-старому.
+UNIT_SRC="$SRC_DIR/deploy/ztlab.service"
+UNIT_DST="/etc/systemd/system/ztlab.service"
+if ! cmp -s "$UNIT_SRC" "$UNIT_DST"; then
+  log "Обновляю юнит systemd (в нём есть изменения)"
+  install -m 644 "$UNIT_SRC" "$UNIT_DST"
+  systemctl daemon-reload
+else
+  log "Юнит systemd не изменился"
+fi
+
+# --- 7. Запуск ---
 log "Запускаю $SERVICE"
-systemctl start "$SERVICE"
+systemctl restart "$SERVICE"
 sleep 3
 
 # Туннель нужен только в схеме «приложение на ноутбуке, VPS только лендинг».
