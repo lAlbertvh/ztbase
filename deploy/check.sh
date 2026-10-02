@@ -56,11 +56,11 @@ if command -v nginx >/dev/null 2>&1; then
   else
     bad "конфигурация nginx битая. nginx -t"
   fi
-  # Обращаемся к 127.0.0.1, но с правильным Host: блоки nginx описаны
-  # по именам ztbase.ru и www.ztbase.ru, и запрос с Host=127.0.0.1 не
-  # попадает ни в один из них — попадёт в лендинг и вернёт 404, хотя
-  # приложение живо и на www отвечает 200.
-  if curl -s --max-time 5 -o /dev/null -w '%{http_code}' -H "Host: ${WWW}" \
+  # Порт 80 отдаёт 301 на HTTPS, поэтому идём по редиректу. --resolve
+  # заставляет www смотреть в 127.0.0.1:443: проверяем собственный
+  # vhost nginx, не завися от публичного DNS и маршрутизации наружу.
+  if curl -sL --max-time 10 --resolve "${WWW}:443:127.0.0.1" \
+       -o /dev/null -w '%{http_code}' -H "Host: ${WWW}" \
        "http://127.0.0.1/health" | grep -q '^200$'; then
     ok "nginx достучался до приложения через upstream"
   else
@@ -97,25 +97,47 @@ fi
 
 info "5. Вход в боевом режиме (самое частое место поломки)"
 # Если nginx не передаёт X-Forwarded-Proto, или в приложении выключен
-# trust proxy, то cookie с флагом Secure не выдаётся — и пользователь
-# упирается в бесконечное возвращение на /login. Проверяем это прямо.
-# Проверять вход надо на www, а не на голом домене: на голом домене
-# nginx отдаёт статический лендинг и маршрута /set-user там просто нет,
-# поэтому проверка ругалась бы на cookie, не проверив ничего.
-BODY=$(curl -s --max-time 10 -X POST "https://${WWW}/set-user" \
-        -H 'Content-Type: application/x-www-form-urlencoded' \
-        --data-urlencode 'lab_slug=проверка' \
-        --data-urlencode 'username=нет' \
-        --data-urlencode 'password=нет' \
-        -D - -o /dev/null 2>/dev/null || true)
-if echo "$BODY" | grep -qi 'set-cookie:'; then
-  ok "cookie выдаётся — Secure работает корректно"
+# trust proxy, то cookie с флагом Secure не принимается браузером — и
+# пользователь упирается в бесконечное возвращение на /login.
+#
+# Проверять это пробным неудачным входом бесполезно: сессия создаётся
+# только после успешного входа (saveUninitialized: false), поэтому cookie
+# не выдаётся и при сломанном, и при исправном nginx — проверка всегда
+# бы ругалась и ни о чём бы не говорила. Поэтому проверяем то, от чего
+# cookie зависит на самом деле.
+if nginx -T 2>/dev/null | grep -qE 'proxy_set_header[[:space:]]+X-Forwarded-Proto[[:space:]]+\$scheme'; then
+  ok "nginx передаёт X-Forwarded-Proto — Secure-cookie будет принят"
 else
-  # Неудачный вход тоже должен получать cookie, иначе проверка не показала бы проблему.
-  printf '  подсказка: cookie не выдаётся.\n'
-  printf '  Проверьте, что в nginx есть  proxy_set_header X-Forwarded-Proto $scheme;\n'
-  printf '  и в /etc/ztlab/ztlab.env:  COOKIE_SECURE=1  и TRUST_PROXY задан\n'
-  FAIL=$((FAIL+1))
+  bad "nginx не передаёт X-Forwarded-Proto. Добавьте в location: proxy_set_header X-Forwarded-Proto \$scheme;"
+fi
+
+if grep -qE '^COOKIE_SECURE=1' /etc/ztlab/ztlab.env 2>/dev/null; then
+  ok "COOKIE_SECURE=1 — cookie ставится с флагом Secure"
+else
+  bad "в /etc/ztlab/ztlab.env нет COOKIE_SECURE=1: браузер не примет cookie и вход зациклится"
+fi
+
+# Полная проверка входа — только если даны настоящие учётные данные.
+# Их нет в системе, и придумывать пароль ради проверки не нужно: смена
+# пароля в бою обнуляет то, что проверка подтвердила.
+if [[ -n "${ZT_CHECK_LAB:-}" && -n "${ZT_CHECK_USER:-}" && -n "${ZT_CHECK_PASS:-}" ]]; then
+  HEADERS=$(curl -s --max-time 10 -X POST "https://${WWW}/set-user" \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode "lab_slug=${ZT_CHECK_LAB}" \
+            --data-urlencode "username=${ZT_CHECK_USER}" \
+            --data-urlencode "password=${ZT_CHECK_PASS}" \
+            -D - -o /dev/null 2>/dev/null || true)
+  COOKIE=$(echo "$HEADERS" | grep -i 'set-cookie:' || true)
+  if echo "$COOKIE" | grep -qi 'secure'; then
+    ok "вход работает, cookie с флагом Secure"
+  elif [[ -n "$COOKIE" ]]; then
+    bad "вход прошёл, но cookie без флага Secure — браузер его отбросит"
+  else
+    bad "вход не выдал cookie: проверьте логин/пароль и логи ztlab"
+  fi
+else
+  printf '  пропуск: полный вход без учётных данных. Задайте ZT_CHECK_LAB, ZT_CHECK_USER, ZT_CHECK_PASS\n'
+  printf '  если нужна и эта проверка.\n'
 fi
 
 info "6. Бэкапы"
