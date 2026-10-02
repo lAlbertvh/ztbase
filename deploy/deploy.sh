@@ -110,14 +110,16 @@ if ! systemctl is-active --quiet "$SERVICE"; then
   fail "Запуск не удался"
 fi
 
-# Проверка живости. На VPS приложение слушает петлю, поэтому проверяем
-# 127.0.0.1; адрес WireGuard используется только в схеме с ноутбуком.
+# Проверка живости. Приложение всегда слушает петлю — на VPS и в
+# разработке, — поэтому проверяем 127.0.0.1. Значение HOST из конфига
+# берём только как запасной вариант: если в нём что-то не то, по коду
+# это не увидеть, но /health ответит.
 if curl -sf --max-time 5 "http://127.0.0.1:3000/health" >/dev/null; then
   log "Проверка живости: ок (127.0.0.1:3000)"
 else
-  WG_IP=$(sed -n 's/^HOST=//p' /etc/ztlab/ztlab.env | tail -1 | tr -d '"' || true)
-  if [[ -n "${WG_IP:-}" ]] && curl -sf --max-time 5 "http://$WG_IP:3000/health" >/dev/null; then
-    log "Проверка живости: ок ($WG_IP)"
+  HOST_CFG=$(sed -n 's/^HOST=//p' /etc/ztlab/ztlab.env | tail -1 | tr -d '"' || true)
+  if [[ -n "${HOST_CFG:-}" ]] && curl -sf --max-time 5 "http://$HOST_CFG:3000/health" >/dev/null; then
+    log "Проверка живости: ок ($HOST_CFG)"
   else
     log "ВНИМАНИЕ: /health не отвечает. Приложение запущено, но не отвечает по HTTP"
   fi

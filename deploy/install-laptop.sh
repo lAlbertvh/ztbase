@@ -78,10 +78,10 @@ install -m 644 "$SRC_DIR/deploy/ztlab.service" /etc/systemd/system/ztlab.service
 systemctl daemon-reload
 systemctl enable ztlab
 
-log "Установлено. Сервис не запущен: сначала настройте WireGuard (HOST)."
+log "Установлено. Сервис не запущен: сначала проверьте HOST."
 echo
 echo "Дальше:"
-echo "  1. Настройте WireGuard: deploy/wireguard/wg0.conf.laptop"
-echo "  2. Впишите в $ENV_FILE правильный HOST (ip addr show wg0)"
-echo "  3. Запустите:  systemctl start ztlab"
-echo "  4. Добавьте бэкапы в cron: см. deploy/README.md"
+echo "  1. Убедитесь, что в $ENV_FILE стоит HOST=127.0.0.1."
+echo "     Приложение слушает петлю: снаружи его видно только через nginx."
+echo "  2. Запустите:  systemctl start ztlab"
+echo "  3. Добавьте бэкапы в cron: см. deploy/README.md"
