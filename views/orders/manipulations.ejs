@@ -32,6 +32,23 @@
             border-radius: 10px; padding: 14px; min-height: 64px;
         }
         .manip.done { border-color: var(--ok); background: #f0fdf4; }
+        /* Обязательная, но не отмеченная. Подсветка, а не запрет: решение
+           о готовности наряда принимает техник, и подсветка помогает ему
+           не отдать работу с пропущенным шагом. */
+        .manip.missed { border-color: var(--warn); background: var(--warn-soft); }
+        .manip.missed .name { font-weight: 700; }
+        .req-mark {
+            display: inline-block; margin-left: 8px; padding: 2px 7px;
+            border: 1px solid var(--line); border-radius: 999px;
+            background: #fff; color: var(--ink-3);
+            font-size: 11px; font-weight: 700; text-transform: none;
+            vertical-align: middle;
+        }
+        .missing-note {
+            margin-top: 10px; padding: 9px 11px; border-radius: 8px;
+            background: var(--warn-soft); border: 1px solid var(--warn);
+            color: var(--ink-2); font-size: 14px; line-height: 1.4;
+        }
         .manip input { width: 30px; height: 30px; flex: 0 0 auto; }
         .manip .body { flex: 1; }
         .manip .name { font-size: 16px; font-weight: 600; line-height: 1.3; }
@@ -77,6 +94,15 @@
         <div class="prog">
             <div class="txt">Выполнено <b><%= counts.done %></b> из <b><%= counts.total %></b></div>
             <div class="bar"><div class="fill" style="width:<%= counts.total ? Math.round(counts.done * 100 / counts.total) : 0 %>%"></div></div>
+            <%# Обязательные, которые ещё не отмечены, подсвечиваются, но
+                выпуск наряда не блокируют: решение, когда работа готова,
+                остаётся за техником и администратором. %>
+            <% if (counts.missingRequired) { %>
+                <div class="missing-note">
+                    Не отмечено обязательных: <b><%= counts.missingRequired %></b>.
+                    Проверьте, всё ли сделано, прежде чем отдавать наряд.
+                </div>
+            <% } %>
         </div>
 
         <% if (!items.length) { %>
@@ -93,7 +119,7 @@
             <% items.forEach(function (m) { %>
                 <%# Стоматолог — внешний клиент: он видит состояние работ,
                     но не может отметить выполнение за лабораторию. %>
-                <form method="post" action="/orders/<%= order.id %>/manipulations/<%= m.id %>" class="manip<%= m.done ? ' done' : '' %><%= isDentist ? ' readonly' : '' %>">
+                <form method="post" action="/orders/<%= order.id %>/manipulations/<%= m.id %>" class="manip<%= m.done ? ' done' : '' %><%= m.required && !m.done ? ' missed' : '' %><%= isDentist ? ' readonly' : '' %>">
                     <input type="hidden" name="done" value="<%= m.done ? '0' : '1' %>">
                     <% if (isDentist) { %>
                         <span class="box" aria-hidden="true"><%= m.done ? '✓' : '' %></span>
@@ -103,7 +129,12 @@
                                aria-label="<%= m.name %>">
                     <% } %>
                     <span class="body">
-                        <span class="name"><%= m.name %></span><br>
+                        <%# Значок «обязательно» стоит у названия, а не у
+                            галочки: он должен читаться и технику, и врачу,
+                            который список только смотрит. %>
+                        <span class="name"><%= m.name %><% if (m.required) { %>
+                            <span class="req-mark" title="Обязательная манипуляция">обязательно</span>
+                        <% } %></span><br>
                         <span class="code"><%= m.code %><%= m.done_by ? ' · ' + m.done_by : '' %><%= m.done_at ? ' · ' + new Date(m.done_at).toLocaleString('ru-RU') : '' %></span>
                     </span>
                     <% if (m.price) { %><span class="price"><%= m.price %> ₽</span><% } %>

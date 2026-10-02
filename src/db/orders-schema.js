@@ -129,6 +129,20 @@ function migrateOrders(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_order_messages_order
       ON order_messages(order_id, id);
+
+    -- Отметка «до какого момента пользователь читал переписку».
+    --
+    -- Отдельная таблица, а не колонка в order_messages: у наряда
+    -- несколько читателей, и у каждого своя отметка. Сообщение считается
+    -- непрочитанным, если оно написано после last_seen_at этого
+    -- пользователя в этом наряде и отправлено не им самим.
+    CREATE TABLE IF NOT EXISTS order_seen (
+      order_id INTEGER NOT NULL,
+      user_id  INTEGER NOT NULL,
+      last_seen_at TEXT,
+      PRIMARY KEY (order_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_seen_user ON order_seen(user_id);
     CREATE INDEX IF NOT EXISTS idx_order_materials_order ON order_materials(order_id);
     CREATE INDEX IF NOT EXISTS idx_materials_lab ON materials(lab_id, active);
 
@@ -237,6 +251,34 @@ function migrateOrders(db) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_lab_number
     ON orders(lab_id, order_number) WHERE order_number <> ''
   `);
+
+  // Отметка «верхний зуб» называлась maxilla. Теперь antagonist —
+  // «антагонист», как в стоматологии: верхний и нижний противопоставлены
+  // друг другу, а не выделены как «главный» и «второй».
+  //
+  // Переписываем список зубов, а не отдельную колонку: flags хранит
+  // набор через запятую, и maxilla может стоять в любом месте строки.
+  // Условие по ',maxilla,' и границам строки важны: подстрока 'maxillary'
+  // не должна превратиться в 'antagonistry'.
+  const renamed = db.prepare(`
+    SELECT id, flags FROM order_teeth
+    WHERE flags IS NOT NULL
+      AND (',' || REPLACE(flags, ' ', '') || ',') LIKE '%,maxilla,%'
+  `).all();
+
+  for (const row of renamed) {
+    // Через split/join, а не через REPLACE по строке: так сохраняются
+    // остальные отметки и их порядок, а случайные совпадения в других
+    // словах не затрагиваются.
+    const next = String(row.flags).split(',').map(f => {
+      const key = f.trim();
+      return key === 'maxilla' ? 'antagonist' : f;
+    }).filter(Boolean).join(',');
+    db.prepare('UPDATE order_teeth SET flags = ? WHERE id = ?').run(next, row.id);
+  }
+  if (renamed.length) {
+    console.log(`Отметка maxilla переименована в antagonist у ${renamed.length} зуб(ах)`);
+  }
 }
 
 module.exports = { migrateOrders };

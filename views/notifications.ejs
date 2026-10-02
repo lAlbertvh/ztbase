@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Уведомления — ZT Lab</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="app-header">
+    <h1>Уведомления</h1>
+    <span class="who"><%= currentUser %><a href="/logout">Выйти</a></span>
+</header>
+
+<main>
+<% if (notice) { %><div class="note"><%= notice %></div><% } %>
+<% if (error) { %><div class="note alert"><%= error %></div><% } %>
+
+<%#
+    Каналы уведомлений: куда сообщать о новом наряде и новом сообщении.
+
+    Сейчас отправка работает в Telegram, ВКонтакте и SMS настроены, но
+    ждут провайдера. Человек должен видеть, что канал заполнен, а не
+    гадать, почему уведомления не приходят, поэтому статус честный:
+    «сохранено, отправка не подключена».
+%>
+<form class="form" method="post" action="/notifications">
+    <div class="hub-group">
+        <h2>Куда писать</h2>
+        <label>Telegram — chat id
+            <input name="tg_chat_id" value="<%= settings.tg_chat_id %>" placeholder="например 123456789"
+                   inputmode="numeric" autocomplete="off">
+        </label>
+        <p class="hint">Работает: уведомление о новом наряде приходит в чат лаборатории.</p>
+
+        <label>ВКонтакте — идентификатор сообщества или получателя
+            <input name="vk_chat_id" value="<%= settings.vk_chat_id %>" autocomplete="off">
+        </label>
+        <p class="hint">Сохранено. Отправка заработает после подключения сообщества.</p>
+
+        <label>SMS — номер телефона
+            <input name="sms_number" value="<%= settings.sms_number %>" inputmode="tel" autocomplete="off"
+                   placeholder="+7 900 000-00-00">
+        </label>
+        <p class="hint">Сохранено. Отправка заработает после подключения SMS-провайдера.</p>
+    </div>
+
+    <div class="hub-group">
+        <h2>О чём сообщать</h2>
+        <label class="check">
+            <input type="checkbox" name="notify_new_order" value="1" <%= settings.notify_new_order === '1' ? 'checked' : '' %>>
+            Новый заказ-наряд
+        </label>
+        <label class="check">
+            <input type="checkbox" name="notify_new_message" value="1" <%= settings.notify_new_message === '1' ? 'checked' : '' %>>
+            Новое сообщение по наряду
+        </label>
+    </div>
+
+    <% if (isAdmin) { %>
+    <button class="btn btn-primary" type="submit">Сохранить</button>
+    <% } else { %>
+    <div class="note">Настройки меняет администратор лаборатории.</div>
+    <% } %>
+</form>
+</main>
+
+</body>
+</html>

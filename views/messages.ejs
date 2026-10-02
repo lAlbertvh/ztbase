@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Сообщения — ZT Lab</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="app-header">
+    <h1>Сообщения</h1>
+    <span class="who"><%= currentUser %><a href="/logout">Выйти</a></span>
+</header>
+
+<main>
+<%#
+    Инбокс переписки.
+
+    Раньше сообщения открывались только из карточки наряда, и понять,
+    где ждут ответа, было невозможно: надо было перебрать все наряды.
+    Здесь две выборки — непрочитанные сверху и все диалоги, — потому
+    что ответить человеку нужно и тогда, когда он уже прочитал сообщение
+    и ждёт реакции.
+%>
+<% if (unread.length) { %>
+<div class="hub-group">
+    <h2>Непрочитанные</h2>
+    <div class="msg-list">
+        <% unread.forEach(function (m) { %>
+        <a class="msg-row<%= m.author_user_id ? '' : ' from-them' %>" href="/orders/<%= m.order_id %>">
+            <span class="who-line">
+                <strong><%= m.author_name %></strong>
+                <span class="when"><%= m.created_at %></span>
+            </span>
+            <span class="body"><%= m.body %></span>
+            <span class="about">
+                Наряд <%= m.order_number %><% if (m.clinic_name) { %> · <%= m.clinic_name %><% } %>
+            </span>
+        </a>
+        <% }); %>
+    </div>
+    <form method="post" action="/messages/seen-all" style="margin-top:12px">
+        <button class="btn" type="submit">Отметить всё прочитанным</button>
+    </form>
+</div>
+<% } %>
+
+<div class="hub-group">
+    <h2>Диалоги</h2>
+    <% if (!threads.length) { %>
+    <div class="note">Переписки пока нет. Сообщения появляются здесь, когда в наряде
+        напишут клиника или техник.</div>
+    <% } else { %>
+    <div class="msg-list">
+        <% threads.forEach(function (t) { %>
+        <a class="msg-row<%= t.unread ? ' is-new' : '' %>" href="/orders/<%= t.id %>">
+            <span class="who-line">
+                <strong><%= t.clinic_name || t.customer || t.order_number %></strong>
+                <span class="badge s-<%= t.stage %>"><%= t.stage %></span>
+                <% if (t.unread) { %><span class="badge alert"><%= t.unread %></span><% } %>
+                <span class="when"><%= t.last_at %></span>
+            </span>
+            <span class="body"><%= t.last_body %></span>
+            <span class="about">
+                Наряд <%= t.order_number %><% if (t.total > 1) { %> · сообщений: <%= t.total %><% } %>
+            </span>
+        </a>
+        <% }); %>
+    </div>
+    <% } %>
+</div>
+</main>
+
+</body>
+</html>

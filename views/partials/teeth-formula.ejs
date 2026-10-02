@@ -1,0 +1,85 @@
+<%
+/*
+ * Зубная формула: настоящий кликабельный зубной ряд.
+ *
+ * Раньше номера вводились в текстовое поле, а рядом стояли четыре
+ * серые полоски с номерами как подсказка. Набирать 16 15 14 вручную
+ * медленно и легко ошибиться — а ошибка в номере зуба означает
+ * изготовление не того, что нужно.
+ *
+ * Теперь зуб нажимается. Поле остаётся, потому что номера иногда
+ * вводят с бумажного бланка, — оно синхронизировано с рядом в обе
+ * стороны. Порядок зубов в поле всегда как в стоматологической
+ * записи: слева направо по верхней челюсти, затем по нижней.
+ *
+ * Формула рисуется по квадрантам, но в порядке 1-2 сверху и 3-4
+ * снизу: так она совпадает с тем, как врач рисует в карточке.
+ *
+ * Параметры:
+ *   value     — номера через запятую или пробел
+ *   flags     — отметки по работе (ключи из FRAME_FLAGS)
+ *   fieldId   — id скрытого поля teeth
+ */
+const parseNums = (raw) => String(raw || '')
+  .split(/[^0-9]+/)
+  .map(Number)
+  .filter((n) => Number.isInteger(n) && n >= 11 && n <= 48);
+const selected = parseNums(typeof value === 'undefined' ? '' : value);
+const isOn = (n) => selected.includes(n);
+%>
+
+<div class="teeth-chart" id="teeth-chart">
+    <%
+    // Верхняя челюсть: 1x слева направо, 2x слева направо.
+    // Верхние зубы нумеруются от центра, поэтому ряд 18 17 ... 11 | 21 ... 28
+    // идёт от дальнего левого к дальнему правому — как и рисуют.
+    %>
+    <div class="teeth-arch">
+        <span class="teeth-arch-label">Верхняя</span>
+        <div class="teeth-arch-row">
+            <% [1, 2].forEach((q) => { %>
+                <div class="teeth-quad" data-quad="<%= q %>">
+                    <% catalog.QUADRANTS.find(x => x.key === String(q)).teeth.forEach((n) => { %>
+                        <button type="button" class="tooth<%= isOn(n) ? ' is-on' : '' %>"
+                                data-tooth="<%= n %>" aria-pressed="<%= isOn(n) ? 'true' : 'false' %>"
+                                title="Зуб <%= n %>"><%= n %></button>
+                    <% }); %>
+                </div>
+            <% }); %>
+        </div>
+    </div>
+
+    <div class="teeth-arch">
+        <span class="teeth-arch-label">Нижняя</span>
+        <div class="teeth-arch-row">
+            <% [3, 4].forEach((q) => { %>
+                <div class="teeth-quad" data-quad="<%= q %>">
+                    <% catalog.QUADRANTS.find(x => x.key === String(q)).teeth.forEach((n) => { %>
+                        <button type="button" class="tooth<%= isOn(n) ? ' is-on' : '' %>"
+                                data-tooth="<%= n %>" aria-pressed="<%= isOn(n) ? 'true' : 'false' %>"
+                                title="Зуб <%= n %>"><%= n %></button>
+                    <% }); %>
+                </div>
+            <% }); %>
+        </div>
+    </div>
+
+    <div class="teeth-chart-actions">
+        <button type="button" class="btn btn-sm" data-teeth-all>Выбрать все зубы</button>
+        <button type="button" class="btn btn-sm" data-teeth-clear>Очистить</button>
+    </div>
+</div>
+
+<input type="hidden" id="<%= fieldId || 'teeth' %>" name="teeth"
+       value="<%= selected.join(' ') %>">
+<%#
+    Поле остаётся видимым, но помечено: с формулой человек выбирает зубы
+    мышкой, а поле нужно для ввода с бланка и для проверки на сервере.
+    readonly, а не скрытое, — иначе браузер не покажет значение, и при
+    ошибке валидации не поймёшь, какие зубы выбраны.
+%>
+<input type="text" class="teeth-input" data-teeth-input
+       value="<%= selected.join(' ') %>" placeholder="18 17 16 15 14"
+       autocomplete="off" aria-label="Номера зубов">
+
+<script src="/js/teeth-formula.js" defer></script>

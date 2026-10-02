@@ -35,13 +35,17 @@ function createCatalogItem(db, labId, data) {
   const dup = db.prepare('SELECT id FROM manipulations WHERE lab_id = ? AND code = ?').get(labId, code);
   if (dup) return { error: 'Манипуляция с таким кодом уже есть' };
 
+  // По умолчанию обязательная: забытый шаг подсвечивается в чек-листе.
+  // Снять признак можно в карточке позиции.
+  const required = data.required === false || data.required === '0' ? 0 : 1;
+
   const info = db.prepare(`
-    INSERT INTO manipulations (lab_id, code, name, work_kind, price, active, sort, note)
-    VALUES (?,?,?,?,?,?,?,?)
+    INSERT INTO manipulations (lab_id, code, name, work_kind, price, active, sort, note, required)
+    VALUES (?,?,?,?,?,?,?,?,?)
   `).run(
     labId, code, name, data.work_kind || null, price,
     data.active === false || data.active === '0' ? 0 : 1,
-    Number(data.sort) || 0, data.note || null
+    Number(data.sort) || 0, data.note || null, required
   );
   return { id: info.lastInsertRowid };
 }
@@ -59,13 +63,20 @@ function updateCatalogItem(db, labId, id, data) {
 
   // Код неизменяем после создания: он уже напечатан на бланках и в
   // отчётах, и его смена ломала бы чек-листы в нарядах, созданных ранее.
+  //
+  // Признак обязательности меняется только в справочнике: в наряде он
+  // остаётся тем, что было на момент создания. Иначе администратор,
+  // сняв обязательность, молча изменил бы условия работы по уже
+  // принятым заказам.
   db.prepare(`
-    UPDATE manipulations SET name = ?, work_kind = ?, price = ?, active = ?, sort = ?, note = ?
+    UPDATE manipulations SET name = ?, work_kind = ?, price = ?, active = ?, sort = ?, note = ?, required = ?
     WHERE lab_id = ? AND id = ?
   `).run(
     name, data.work_kind || null, price,
     data.active === false || data.active === '0' ? 0 : 1,
-    Number(data.sort) || 0, data.note || null, labId, id
+    Number(data.sort) || 0, data.note || null,
+    data.required === false || data.required === '0' ? 0 : 1,
+    labId, id
   );
   return { id };
 }
@@ -140,7 +151,7 @@ function addCatalogToOrder(db, labId, orderId, kinds) {
   const marks = list.length ? list.map(() => '?').join(',') : "''";
 
   const catalog = db.prepare(`
-    SELECT id, code, name, price FROM manipulations
+    SELECT id, code, name, price, required FROM manipulations
     WHERE lab_id = ? AND active = 1
       AND (work_kind IS NULL OR work_kind IN (${marks}))
     ORDER BY sort, id
@@ -154,14 +165,14 @@ function addCatalogToOrder(db, labId, orderId, kinds) {
   );
 
   const ins = db.prepare(`
-    INSERT INTO order_manipulations (order_id, lab_id, manipulation_id, code, name, price)
-    VALUES (?,?,?,?,?,?)
+    INSERT INTO order_manipulations (order_id, lab_id, manipulation_id, code, name, price, required)
+    VALUES (?,?,?,?,?,?,?)
   `);
 
   let added = 0;
   for (const c of catalog) {
     if (have.has(c.code)) continue;
-    ins.run(orderId, labId, c.id, c.code, c.name, c.price);
+    ins.run(orderId, labId, c.id, c.code, c.name, c.price, c.required ? 1 : 0);
     added += 1;
   }
   return added;
@@ -215,12 +226,25 @@ function setManipulationDone(db, labId, orderId, manipId, done, user) {
   return { ok: true, total: orderManipulationCounts(db, labId, orderId) };
 }
 
+/**
+ * Итог по манипуляциям наряда.
+ *
+ * missingRequired — неотмеченные обязательные. Они не блокируют выпуск
+ * наряда (решение об этом принимает техник), но подсвечиваются, чтобы
+ * забытая работа была видна до отдачи клинике, а не после.
+ */
 function orderManipulationCounts(db, labId, orderId) {
   const r = db.prepare(`
-    SELECT COUNT(*) AS total, SUM(done) AS done FROM order_manipulations
+    SELECT COUNT(*) AS total, SUM(done) AS done,
+           SUM(CASE WHEN required = 1 AND done = 0 THEN 1 ELSE 0 END) AS missing
+    FROM order_manipulations
     WHERE lab_id = ? AND order_id = ?
   `).get(labId, orderId);
-  return { total: r.total || 0, done: r.done || 0 };
+  return {
+    total: r.total || 0,
+    done: r.done || 0,
+    missingRequired: r.missing || 0,
+  };
 }
 
 // ---------- Отчёт для зарплаты ----------

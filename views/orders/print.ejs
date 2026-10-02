@@ -78,20 +78,26 @@
 
     <div class="sub" style="text-align:left;font-weight:bold;margin-bottom:1.5mm">Зубная формула</div>
     <table class="teeth">
-        <% const teethAll = [];
-           catalog.QUADRANTS.forEach(q => q.teeth.forEach(t => teethAll.push(t)));
-           const marked = new Set(order.teeth.map(t => t.tooth)); %>
+        <%
+           // Формула печатается двумя рядами: верхняя и нижняя челюсть.
+           // Верхняя — квадранты 1 и 2, нижняя — 3 и 4, поэтому ряд
+           // переносится после второго квадранта.
+           //
+           // Ячейки на ряд — ровно столько, сколько зубов в двух
+           // квадрантах, без добавления. Лишняя ячейка на квадрант
+           // растягивала таблицу, и на печати зубы уходили за поле.
+           const marked = new Set(order.teeth.map(t => t.tooth));
+           const perRow = 16; // два квадранта по 8 зубов
+        %>
+        <% [1, 2].forEach(row => { %>
         <tr>
-            <% catalog.QUADRANTS.forEach((q, qi) => { %>
-                <% q.teeth.forEach(t => { %>
+            <% [row === 1 ? 1 : 3, row === 1 ? 2 : 4].forEach(qn => { %>
+                <% catalog.QUADRANTS.find(q => q.key === String(qn)).teeth.forEach(t => { %>
                     <td class="<%= marked.has(t) ? 'on' : '' %>"><%= t %></td>
                 <% }); %>
-                <% if (qi === 1) { %></tr><tr><% } %>
             <% }); %>
         </tr>
-        <tr>
-            <% catalog.QUADRANTS.forEach(q => { q.teeth.forEach(() => { %><td>&nbsp;</td><% }); %><td>&nbsp;</td><% }); %>
-        </tr>
+        <% }); %>
     </table>
 
     <% const t0 = order.teeth[0]; %>

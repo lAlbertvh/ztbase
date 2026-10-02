@@ -45,12 +45,18 @@ function parseKeys(value, allowed) {
  * @returns {{ok: true, data: object} | {ok: false, error: string}}
  */
   function parseOrderForm(body, opts = {}) {
-    const canSetPrices = opts.canSetPrices !== false;    const orderNumber = str(body.order_number);
+    const canSetPrices = opts.canSetPrices !== false;
+    // Этапы и отметки сверяются с настройками лаборатории, а не с
+    // константами: иначе этап, добавленный администратором, не прошёл бы
+    // проверку, а скрытый — попал бы в наряд из подделанной формы.
+    const stageKeys = opts.stageKeys || STAGE_KEYS;
+    const flagKeys = opts.flagKeys || new Set(R.FRAME_FLAGS.map(o => o.key));
+    const orderNumber = str(body.order_number);
   if (!orderNumber) return { ok: false, error: 'Укажите номер наряда' };
   if (orderNumber.length > 60) return { ok: false, error: 'Номер наряда слишком длинный' };
 
   const stage = str(body.stage) || 'new';
-  if (!STAGE_KEYS.has(stage)) return { ok: false, error: 'Неизвестный этап работы' };
+  if (!stageKeys.has(stage)) return { ok: false, error: 'Неизвестный этап работы' };
 
   const teethRaw = parseTeeth(body.teeth);
   if (teethRaw.length === 0) return { ok: false, error: 'Укажите хотя бы один зуб в зубной формуле' };
@@ -83,7 +89,7 @@ function parseKeys(value, allowed) {
       color: str(body.color).slice(0, 40),
       tooth_note: str(body.tooth_note).slice(0, 1000),
       abutment: parseKeys(body.abutment, new Set(R.ABUTMENT_OPTIONS.map(o => o.key))),
-      flags: parseKeys(body.flags, new Set(R.FRAME_FLAGS.map(o => o.key))),
+      flags: parseKeys(body.flags, flagKeys),
       incoming: parseKeys(body.incoming, new Set(R.INCOMING_OPTIONS.map(o => o.key))),
       delivery: parseKeys(body.delivery, new Set(R.DELIVERY_OPTIONS.map(o => o.key))),
       materials: parseMaterials(body),
@@ -474,9 +480,13 @@ function saveOrder(db, labId, data, user) {
 /**
  * Добавляет запись в журнал этапов. Так как «Взято в работу»
  * фиксирует дату начала, она же ставится в orders.taken_at.
+ *
+ * stageKeys — множество активных этапов лаборатории. Список этапов
+ * настраивается администратором, поэтому проверка идёт по нему, а не
+ * по константе из dental-reference: иначе добавленный этап отвергался бы.
  */
-function addStage(db, labId, orderId, stage, note, user) {
-  if (!STAGE_KEYS.has(stage)) return null;
+function addStage(db, labId, orderId, stage, note, user, stageKeys) {
+  if (!(stageKeys || STAGE_KEYS).has(stage)) return null;
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
   const info = db.prepare(`
     INSERT INTO order_stages (order_id, lab_id, stage, note, user, created_at, finished_at)
@@ -504,7 +514,7 @@ function addStage(db, labId, orderId, stage, note, user) {
 // { name, clinicId }. Одна форма на оба запроса — иначе придётся помнить
 // для каждого свой формат, и рано или поздно передадим объект туда,
 // где ждут строку.
-function stageSummary(db, labId, opts) {
+function stageSummary(db, labId, opts, stageKeys) {
   const who = opts && opts.clinicOf;
   let rows;
   if (who && who.clinicId) {
@@ -521,7 +531,7 @@ function stageSummary(db, labId, opts) {
     rows = db.prepare('SELECT stage, COUNT(*) AS n FROM orders WHERE lab_id = ? GROUP BY stage').all(labId);
   }
   const map = Object.fromEntries(rows.map(r => [r.stage, r.n]));
-  return Object.fromEntries(R.STAGES.map(s => [s.key, map[s.key] || 0]));
+  return Object.fromEntries([...(stageKeys || STAGE_KEYS)].map(k => [k, map[k] || 0]));
 }
 
   /** Удаляет наряд вместе со всеми связанными записями. */

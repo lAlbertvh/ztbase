@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d6efd">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="icon" href="/icons/icon-192.png">
+    <title>ZT Lab — <%= currentUser %></title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="app-header">
+    <h1>ZT Lab</h1>
+    <span class="who">
+        <%= currentUser %>
+        <% if (isDentist) { %><span class="badge s-new">Врач</span><% } %>
+        <a href="/logout">Выйти</a>
+    </span>
+</header>
+
+<main>
+<%#
+    Хаб приложения. Раньше на '/' стоял обмен файлами, и человек,
+    открывая программу, попадал в случайный раздел, а разделы искал
+    по памяти. Теперь приложение начинается с меню.
+
+    Порядок разделов — по частоте, а не по логике настроек: заказы и
+    работа с контрагентом нужны каждый день, учёт и настройки — реже.
+%>
+<div class="hub">
+
+    <% if (usage) { %>
+    <div class="note<%= usage.over > 0 ? ' alert' : '' %>">
+        Тариф «<%= usage.plan.title %>»: <%= usage.max %> мест, занято <%= usage.used %>,
+        свободно <%= usage.free %>.
+        <% if (usage.over > 0) { %>
+            Превышение на <%= usage.over %> — работать можно, но нужен другой тариф.
+        <% } %>
+        <% if (setupPendingHere) { %>
+            <div style="margin-top:8px"><a class="btn btn-sm" href="/setup">Настройка не завершена</a></div>
+        <% } %>
+    </div>
+    <% } %>
+
+    <div class="hub-group">
+        <h2>Заказы</h2>
+        <div class="hub-grid">
+            <a class="hub-card" href="/orders">
+                <span class="t">Заказ-наряды</span>
+                <span class="d">Список, этапы производства, переписка</span>
+                <% if (counters.orders) { %><span class="n"><%= counters.orders %> в работе</span><% } %>
+            </a>
+            <% if (!isDentist) { %>
+            <a class="hub-card" href="/orders/new">
+                <span class="t">Новый наряд</span>
+                <span class="d">Создать заказ-наряд</span>
+            </a>
+            <% } %>
+        </div>
+    </div>
+
+    <div class="hub-group">
+        <h2>Работа с контрагентом</h2>
+        <div class="hub-grid">
+            <a class="hub-card" href="/messages">
+                <span class="t">Сообщения</span>
+                <span class="d">Переписка с клиниками и техниками по нарядам</span>
+                <% if (counters.unread) { %><span class="n alert"><%= counters.unread %> непрочитанных</span><% } %>
+            </a>
+            <a class="hub-card" href="/files">
+                <span class="t">Обмен файлами</span>
+                <span class="d">STL, сканы, фотографии</span>
+                <% if (counters.files) { %><span class="n"><%= counters.files %> не забрали</span><% } %>
+            </a>
+            <% if (!isDentist) { %>
+            <a class="hub-card" href="/titan">
+                <span class="t">Титановые основания</span>
+                <span class="d">Учёт, статусы и печать</span>
+            </a>
+            <% } %>
+        </div>
+    </div>
+
+    <% if (!isDentist) { %>
+    <div class="hub-group">
+        <h2>Заказы и учёт</h2>
+        <div class="hub-grid">
+            <a class="hub-card" href="/orders/catalog/constructions">
+                <span class="t">Прайс-лист</span>
+                <span class="d">Конструкции, группы, цены и сроки</span>
+            </a>
+            <a class="hub-card" href="/orders/catalog/materials">
+                <span class="t">Материалы</span>
+                <span class="d">Справочник материалов и учёт в нарядах</span>
+            </a>
+            <a class="hub-card" href="/orders/catalog/manipulations">
+                <span class="t">Манипуляции и ставки</span>
+                <span class="d">Шаги чек-листа и цены для расчёта зарплаты</span>
+            </a>
+            <a class="hub-card" href="/orders/stats/manipulations">
+                <span class="t">Отчёт по зарплате</span>
+                <span class="d">Кто сколько выполнил за период</span>
+            </a>
+        </div>
+    </div>
+    <% } %>
+
+    <div class="hub-group">
+        <h2>Лаборатория</h2>
+        <div class="hub-grid">
+            <% if (isAdmin) { %>
+            <a class="hub-card" href="/users">
+                <span class="t">Пользователи</span>
+                <span class="d">Сотрудники, коды для входа, роли</span>
+            </a>
+            <a class="hub-card" href="/setup/clinics">
+                <span class="t">Клиники</span>
+                <span class="d">Стоматологии-партнёры и их представители</span>
+            </a>
+            <% } %>
+            <a class="hub-card" href="/notifications">
+                <span class="t">Уведомления</span>
+                <span class="d">Telegram, ВКонтакте, SMS о новых сообщениях</span>
+            </a>
+        </div>
+    </div>
+
+    <% if (isAdmin) { %>
+    <div class="hub-group">
+        <h2>Настройки</h2>
+        <div class="hub-grid">
+            <a class="hub-card" href="/admin">
+                <span class="t">Настройки приложения</span>
+                <span class="d">Этапы, отметки, тариф и команда</span>
+            </a>
+        </div>
+    </div>
+    <% } %>
+
+</div>
+</main>
+
+</body>
+</html>

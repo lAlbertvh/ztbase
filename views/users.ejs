@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Пользователи — ZT Lab</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="app-header">
+    <h1>Пользователи</h1>
+    <span class="who"><%= currentUser %><a href="/logout">Выйти</a></span>
+</header>
+
+<main>
+<% if (notice) { %><div class="note"><%= notice %></div><% } %>
+<% if (error) { %><div class="note alert"><%= error %></div><% } %>
+
+<%#
+    Пользователи и коды входа — в одном разделе.
+
+    Код нужен, чтобы не выбирать пароль за человека: администратор
+    выдаёт одноразовый код, сотрудник сам приходит на /join и ставит
+    свой пароль. Обмен паролями в мессенджере — это пароль в открытом
+    виде в чужом чате, и его потом не отозвать.
+%>
+<div class="hub-group">
+    <h2>Сотрудники</h2>
+    <% if (usage) { %>
+    <div class="note<%= usage.over > 0 ? ' alert' : '' %>">
+        Тариф «<%= usage.plan.title %>»: <%= usage.max %> мест, занято <%= usage.used %>, свободно <%= usage.free %>.
+        <% if (usage.over > 0) { %>Превышение на <%= usage.over %>.<% } %>
+    </div>
+    <% } %>
+
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr><th>Имя</th><th>Роль</th><th>Специализация</th><th>Телефон</th><th>Статус</th><th></th></tr>
+        </thead>
+        <tbody>
+        <% staff.forEach(function (u) { %>
+            <tr class="<%= u.active ? '' : 'muted' %>">
+                <td><%= u.name %></td>
+                <td><%= roleLabels[u.role] || u.role %></td>
+                <td><%= u.specialization ? (specializations[u.role] || []).filter(s => s[0] === u.specialization).map(s => s[1]).join('') : '' %></td>
+                <td><%= u.phone || '' %></td>
+                <td><%= u.active ? 'Работает' : 'Отключён' %></td>
+                <td class="actions">
+                    <form method="post" action="/users/<%= u.id %>/toggle">
+                        <button class="btn btn-sm" type="submit"><%= u.active ? 'Отключить' : 'Включить' %></button>
+                    </form>
+                </td>
+            </tr>
+        <% }); %>
+        <% if (!staff.length) { %>
+            <tr><td colspan="6" class="muted">Сотрудников пока нет. Выдайте код ниже.</td></tr>
+        <% } %>
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="hub-group">
+    <h2>Код для входа</h2>
+    <%#
+        Форма выдаёт код и показывает его один раз. В базе лежит только
+        хэш, поэтому восстановить код из базы нельзя — если потерян,
+        выдают новый.
+    %>
+    <form class="form" method="post" action="/users/codes">
+        <div class="row">
+            <label>Кого добавляем
+                <select name="role">
+                    <option value="tech">Техник</option>
+                    <option value="admin">Администратор</option>
+                </select>
+            </label>
+            <label>Специализация
+                <select name="specialization">
+                    <option value="">— не важно —</option>
+                    <% (specializations.tech || []).forEach(function (s) { %>
+                        <option value="<%= s[0] %>"><%= s[1] %></option>
+                    <% }); %>
+                </select>
+            </label>
+        </div>
+        <label>Заметка (необязательно)
+            <input name="note" maxlength="200" placeholder="Например: вышел 12 марта">
+        </label>
+        <p class="hint">Код действует <%= codeTtlDays %> дней и срабатывает один раз. Отправьте сотруднику ссылку
+            <a href="/join" target="_blank">на страницу входа</a> или сам код.</p>
+        <button class="btn btn-primary" type="submit">Выдать код</button>
+    </form>
+
+    <% if (codes.length) { %>
+    <div class="table-wrap" style="margin-top:16px">
+    <table>
+        <thead>
+            <tr><th>Кто</th><th>Роль</th><th>Заметка</th><th>Действует до</th><th>Статус</th><th></th></tr>
+        </thead>
+        <tbody>
+        <% codes.forEach(function (c) { %>
+            <tr class="<%= c.used_at ? 'muted' : '' %>">
+                <td><%= c.used_name || '—' %></td>
+                <td><%= roleLabels[c.role] || c.role %></td>
+                <td><%= c.note || '' %></td>
+                <td><%= c.expires_at ? c.expires_at.slice(0, 10) : '—' %></td>
+                <td><%= c.used_at ? (c.used_name === 'отозван' ? 'Отозван' : 'Использован') : 'Ждёт' %></td>
+                <td class="actions">
+                    <% if (!c.used_at) { %>
+                    <form method="post" action="/users/codes/<%= c.id %>/revoke">
+                        <button class="btn btn-sm" type="submit">Отозвать</button>
+                    </form>
+                    <% } %>
+                </td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table>
+    </div>
+    <% } %>
+</div>
+</main>
+
+</body>
+</html>

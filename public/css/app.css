@@ -7,124 +7,263 @@
  * большая навигация. Экраны подключают этот файл и дописывают в него
  * только то, что действительно специфично для них.
  *
+ * Палитра, радиусы и типографика взяты с лендинга ztbase.ru: раньше
+ * приложение выглядело «топором» рядом со сайтом, и человек, пришедший
+ * с лендинга, попадал в другой интерфейс. Теперь это один стиль.
+ *
  * Порядок: app.css подключается первым, локальный <style> — после,
  * поэтому частные правила перекрывают общие без !important.
  */
 
 :root {
-  --brand:        #f59e0b;
-  --brand-dark:   #d97706;
-  --brand-ink:    #7c2d12;
-  --accent:       #2b6cb0;
-  --danger:       #c53030;
+  /* Палитра лендинга. */
+  --ink:          #0f172a;
+  --ink-2:        #334155;
+  --muted:        #64748b;
+  --line:         #e2e8f0;
+  --line-strong:  #cbd5e1;
+  --bg:           #ffffff;
+  --bg-soft:      #f8fafc;
+  --accent:       #0d6efd;
+  --accent-dark:  #0a58ca;
+  --accent-soft:  #eff6ff;
+  --accent-line:  #dbeafe;
+
+  --danger:       #dc2626;
+  --danger-soft:  #fef2f2;
   --ok:           #15803d;
+  --ok-soft:      #f0fdf4;
+  --warn:         #b45309;
+  --warn-soft:    #fffbeb;
 
-  --bg:           #f4f5f7;
-  --surface:      #ffffff;
-  --surface-2:    #eef1f5;
-  --line:         #e2e4e9;
-  --line-strong:  #cbd2dc;
+  --radius:       14px;
+  --radius-sm:    10px;
+  --radius-pill:  999px;
+  --shadow:       0 1px 3px rgba(15,23,42,.06);
+  --shadow-lg:    0 12px 32px rgba(15,23,42,.10);
+  --header-h:     66px;
+  --max:          1120px;
+}
 
-  --ink:          #23272f;
-  --ink-2:        #4b5563;
-  --ink-3:        #6b7280;
-  --ink-4:        #8a93a0;
-
-  --radius:       8px;
-  --radius-sm:    6px;
-  --shadow:       0 1px 3px rgba(0,0,0,.08);
-  --shadow-lg:    0 8px 24px rgba(15,23,42,.10);
-  --header-h:     58px;
+/* Имена из старой палитры оставлены как алиасы: ими пользуются
+   локальные <style> на экранах, которые ещё не переведены на новую. */
+:root {
+  --brand:       var(--accent);
+  --brand-dark:  var(--accent-dark);
+  --brand-ink:   var(--ink);
+  --surface:     #ffffff;
+  --surface-2:   var(--bg-soft);
+  --ink-3:       var(--muted);
+  --ink-4:       #94a3b8;
 }
 
 * { box-sizing: border-box; }
 
+html { -webkit-text-size-adjust: 100%; }
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  /* 16px, а не 15px: цифры в зубной формуле и цены читаются на
+     телефоне, и мелкий кегль здесь оборачивается ошибками в заказе. */
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
   margin: 0;
-  padding: 0 0 40px;
-  background: var(--bg);
+  padding: 0 0 48px;
+  background: var(--bg-soft);
   color: var(--ink);
-  -webkit-text-size-adjust: 100%;
 }
 
+h1, h2, h3 { line-height: 1.25; margin: 0 0 .5em; letter-spacing: -.01em; }
+h1 { font-size: 26px; font-weight: 800; }
+h2 { font-size: 20px; font-weight: 750; }
+h3 { font-size: 17px; font-weight: 700; }
+p  { margin: 0 0 1rem; }
+
 a { color: var(--accent); }
+a:hover { color: var(--accent-dark); }
 
 /* ---------- Шапка ---------- */
 
 .app-header {
-  background: var(--brand);
-  color: #fff;
-  padding: 10px 16px;
+  background: rgba(255,255,255,.9);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  padding: 12px 20px;
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
   position: sticky;
   top: 0;
-  z-index: 20;
-  box-shadow: 0 1px 0 rgba(0,0,0,.08);
+  z-index: 30;
 }
 .app-header h1 {
   font-size: 19px;
   margin: 0;
-  font-weight: 600;
+  font-weight: 750;
+  letter-spacing: -.01em;
   white-space: nowrap;
 }
 .app-header .who {
-  font-size: 13px;
-  opacity: .95;
+  font-size: 14px;
+  color: var(--muted);
   margin-left: auto;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.app-header .who a { color: #fff; }
+.app-header .who a { color: var(--muted); text-decoration: none; }
+.app-header .who a:hover { color: var(--accent); }
 
 /* ---------- Кнопки ---------- */
+/*
+ * Любое действие — кнопка. Раньше часть действий была голым текстом и
+ * подчёркнутыми ссылками, и их нельзя было отличить от описания.
+ * .btn-link — исключение для длинных текстовых действий внутри формы.
+ */
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 14px;
-  min-height: 38px;
+  gap: 8px;
+  padding: 11px 18px;
+  min-height: 44px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 500;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 650;
   font-family: inherit;
   line-height: 1.2;
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
-  transition: filter .12s ease, background-color .12s ease;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
 }
-.btn:hover { filter: brightness(.96); }
-.btn:active { filter: brightness(.9); }
-.btn:disabled { opacity: .5; cursor: default; filter: none; }
+.btn:hover { background: var(--accent-dark); color: #fff; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: default; }
+.btn:disabled:hover { background: var(--accent); }
 
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-brand   { background: var(--surface); border-color: var(--surface); color: var(--brand-ink); }
-.btn-danger  { background: var(--danger); border-color: var(--danger); color: #fff; }
-.btn-ghost   { background: transparent; border-color: var(--line-strong); color: var(--ink-2); }
-.btn-lg      { min-height: 46px; padding: 11px 20px; font-size: 15px; }
-.btn-sm      { min-height: 32px; padding: 5px 10px; font-size: 13px; }
+.btn-ghost {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.btn-ghost:hover { background: var(--bg-soft); color: var(--accent); border-color: var(--accent); }
+
+.btn-soft {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  border-color: var(--accent-line);
+}
+.btn-soft:hover { background: var(--accent-line); color: var(--accent-dark); }
+
+.btn-danger  { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #b91c1c; color: #fff; }
+
+.btn-ok      { background: var(--ok); color: #fff; }
+.btn-ok:hover { background: #166534; color: #fff; }
+
+.btn-lg  { min-height: 52px; padding: 14px 26px; font-size: 16px; }
+.btn-sm  { min-height: 34px; padding: 6px 12px; font-size: 14px; border-radius: 8px; }
+.btn-xs  { min-height: 28px; padding: 4px 9px;  font-size: 13px; border-radius: 7px; }
+.btn-block { display: flex; width: 100%; }
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 4px 2px;
+  min-height: 0;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.btn-link:hover { background: none; color: var(--accent-dark); }
+
+/* Иконка-кнопка: квадратная, с текстом-подсказкой для доступности. */
+.btn-icon { padding: 0; width: 38px; min-height: 38px; flex: 0 0 38px; }
+.btn-sm.btn-icon { width: 34px; min-height: 34px; flex-basis: 34px; }
+
+/* ---------- Хаб: разделы приложения ---------- */
+/*
+ * Точка входа в приложение. Человек открывает программу и видит
+ * четыре раздела, а не случайный экран. Порядок — по частоте:
+ * заказы и работа с контрагентом нужны каждый день, учёт и настройки
+ * лаборатории — реже.
+ */
+
+.hub { display: flex; flex-direction: column; gap: 30px; }
+
+.hub-group > h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+
+.hub-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.hub-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  min-height: 92px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.hub-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  color: var(--ink);
+}
+.hub-card .t { font-size: 17px; font-weight: 700; }
+.hub-card .d { font-size: 14px; color: var(--muted); line-height: 1.45; }
+
+/* Счётчик на плитке: непрочитанные сообщения, активные наряды. */
+.hub-card .n {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+.hub-card .n.alert { background: var(--danger-soft); color: var(--danger); }
 
 /* ---------- Большая навигация по разделам ---------- */
 /*
- * Заменяет прежнюю цепочку ссылок в шапке. Плитки крупные и подписаны
- * словами: с карточки наряда раньше нельзя было попасть ни в обмен
- * файлами, ни в титановые основания — навигация была только на списке
- * нарядов, и то без титана.
+ * Плитки крупные и подписанные словами. Остаются на экранах, где
+ * нужен быстрый переход, — на карточке наряда и списке нарядов.
  */
 
 .nav-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
-  margin: 0 0 18px;
+  margin: 0 0 20px;
 }
 .nav-tile {
   display: flex;
@@ -146,22 +285,22 @@ a { color: var(--accent); }
   border-color: var(--line-strong);
   transform: translateY(-1px);
   box-shadow: var(--shadow-lg);
+  color: var(--ink);
 }
-.nav-tile .ico { font-size: 20px; line-height: 1.2; }
-.nav-tile .t   { font-size: 15px; font-weight: 600; }
-.nav-tile .d   { font-size: 12px; color: var(--ink-4); }
+.nav-tile .t  { font-size: 15px; font-weight: 700; }
+.nav-tile .d  { font-size: 13px; color: var(--muted); }
 
 .nav-tile[data-accent="orders"] { border-left-color: var(--accent); }
-.nav-tile[data-accent="files"]  { border-left-color: #0e7490; }
-.nav-tile[data-accent="titan"]  { border-left-color: var(--brand-dark); }
+.nav-tile[data-accent="files"]  { border-left-color: #0891b2; }
+.nav-tile[data-accent="titan"]  { border-left-color: var(--warn); }
 .nav-tile[data-accent="new"]    { border-left-color: var(--ok); }
 .nav-tile[data-accent="admin"]  { border-left-color: #7c3aed; }
 .nav-tile[aria-current="page"],
 .nav-tile.is-active {
   border-color: var(--accent);
-  background: #f2f7ff;
+  background: var(--accent-soft);
 }
-.nav-tile.is-active .t { color: var(--accent); }
+.nav-tile.is-active .t { color: var(--accent-dark); }
 
 /* Компактный вариант для карточки наряда: плитки в строку */
 .nav-tiles-inline { grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); }
@@ -171,22 +310,44 @@ a { color: var(--accent); }
 input[type=text], input[type=password], input[type=search],
 input[type=number], input[type=date], input[type=tel], input[type=email],
 select, textarea {
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: 16px;
   font-family: inherit;
   color: var(--ink);
-  background: var(--surface);
+  background: #fff;
   max-width: 100%;
+  min-height: 44px;
 }
 input:focus, select:focus, textarea:focus {
-  outline: 2px solid rgba(43,108,176,.35);
+  outline: 2px solid rgba(13,110,253,.30);
   outline-offset: 1px;
   border-color: var(--accent);
 }
-textarea { resize: vertical; min-height: 80px; }
-label { font-size: 13px; color: var(--ink-3); }
+textarea { resize: vertical; min-height: 90px; line-height: 1.55; }
+label { font-size: 14px; color: var(--ink-2); font-weight: 600; }
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.field > label { margin: 0; }
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 44px;
+}
+.check:hover { border-color: var(--accent); }
+.check input[type=checkbox] { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--accent); }
+.check:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
 
 /* ---------- Таблицы ---------- */
 
@@ -194,27 +355,27 @@ table {
   width: 100%;
   border-collapse: collapse;
   background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: var(--shadow);
 }
 th {
-  background: var(--surface-2);
+  background: var(--bg-soft);
   text-align: left;
-  padding: 9px 10px;
+  padding: 11px 12px;
   font-size: 13px;
   color: var(--ink-2);
   border-bottom: 1px solid var(--line);
-  font-weight: 600;
+  font-weight: 700;
 }
 td {
-  padding: 9px 10px;
-  border-bottom: 1px solid #eef0f3;
-  font-size: 14px;
+  padding: 11px 12px;
+  border-bottom: 1px solid #eef2f7;
+  font-size: 15px;
   vertical-align: top;
 }
 tr:last-child td { border-bottom: 0; }
-tbody tr:hover { background: #fafbfc; }
+tbody tr:hover { background: var(--bg-soft); }
 
 /* ---------- Карточки и служебные элементы ---------- */
 
@@ -222,23 +383,242 @@ tbody tr:hover { background: #fafbfc; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 20px;
   box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+/* Карточка с цветной шапкой — как на лендинге. */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.card-head .spacer { flex: 1; }
+
+main, .page { padding: 24px 20px; max-width: var(--max); margin: 0 auto; }
+main.wide, .page.wide { max-width: 1280px; }
+
+.muted { color: var(--muted); font-size: 14px; }
+.hint {
+  font-size: 14px;
+  color: var(--muted);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 10px 0 0;
+}
+.empty { text-align: center; padding: 48px 16px; color: var(--muted); }
+
+.note {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--ink-2);
+  font-size: 14px;
+  margin: 16px 0 0;
+}
+.note.warn { background: var(--warn-soft); border-left-color: var(--warn); color: #7c2d12; }
+.note.alert { background: var(--danger-soft); border-left-color: var(--danger); color: #991b1b; }
+/* Кнопка-действие по умолчанию. Раньше был только .btn, и разные
+ * разделы называли главную кнопку по-разному — btn-primary, btn-ok,
+ * без класса. Имя закреплено здесь, чтобы новые экраны не выдумывали
+ * своё. */
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-dark); color: #fff; }
+
+/* Узкая колонка: вход по коду, настройки одного списка. */
+main.narrow, .page.narrow { max-width: 560px; }
+
+/* Правовые документы приходят готовым HTML с лендинга: их внутренние
+ * заголовки и абзацы не должны разъезжаться с остальным приложением. */
+.legal { max-width: 820px; }
+.legal h1 { font-size: 26px; margin: 0 0 18px; }
+.legal h2 { font-size: 19px; margin: 26px 0 10px; }
+.legal p, .legal li { font-size: 15px; line-height: 1.65; color: var(--ink-2); }
+.legal ul, .legal ol { padding-left: 22px; margin: 10px 0; }
+.legal a { color: var(--accent); }
+
+/* ---------- Этапы работы ---------- */
+
+/* Этап отмечается кнопкой, а не выбором из списка: список требовал
+ * двух действий, и именно на втором — «а не тот ли этап?» — пропускали
+ * работу. Нажал кнопку — этап записан.
+ *
+ * is-current и is-picked выглядят по-разному намеренно. Первый — «здесь
+ * сейчас», его нажать нельзя. Второй — «переходим сюда», нажатая
+ * кнопка до отправки формы. Если их не различить, есть риск отметить
+ * не тот этап. */
+.stage-form {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.stage-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.stage-btn {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink-2);
+  font-weight: 700;
+}
+.stage-btn.is-current {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-dark);
+  cursor: default;
+}
+.stage-btn.is-picked {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+.stage-note { width: 100%; max-width: 460px; }
+.stage-note input { width: 100%; }
+
+/* ---------- Зубная формула ---------- */
+
+/* Ряд зубов рисуется квадрантами по 8 зубов. Ширина фиксированная в
+ * гридах, а не в пикселях, иначе на телефоне ряд не поместится, а на
+ * десктопе зубы получатся огромными. */
+.teeth-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+.teeth-arch { display: flex; align-items: center; gap: 12px; }
+/* Метка челюсти прячется на телефоне: там для неё не хватает ширины,
+ * а «верхняя» и «нижняя» и так видно по порядку строк. */
+.teeth-arch-label {
+  flex: 0 0 62px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+.teeth-arch-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  flex: 1 1 auto;
+  max-width: 520px;
+}
+.teeth-quad {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 3px;
+  /* Центральные зубы (11/21 и 31/41) сходятся к середине челюсти,
+   * поэтому между квадрантами нужен зазор — иначе 11 и 21 слипнутся
+   * в один зуб. */
+  padding: 0 2px;
+}
+.teeth-quad[data-quad="1"], .teeth-quad[data-quad="4"] { direction: rtl; }
+.teeth-quad[data-quad="1"] > *, .teeth-quad[data-quad="4"] > * { direction: ltr; }
+
+.tooth {
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s, transform .06s;
+}
+.tooth:hover { border-color: var(--accent); color: var(--accent); }
+.tooth:active { transform: scale(.94); }
+/* Выбранный зуб — залит синим. Это единственное состояние, которое
+ * обязано читаться с одного взгляда: пропущенный зуб означает работу
+ * не для того пациента. */
+.tooth.is-on {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+.tooth:focus-visible { outline: 3px solid var(--accent-dark); outline-offset: 1px; }
+
+.teeth-chart-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Видимое поле под рядом — представление выбранного, а не второй
+ * источник правды: сервер читает только скрытое поле teeth. */
+.teeth-input {
+  margin-top: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .5px;
 }
 
-main, .page { padding: 16px; max-width: 1280px; margin: 0 auto; }
+@media (max-width: 720px) {
+  .teeth-arch { flex-direction: column; align-items: stretch; gap: 6px; }
+  .teeth-arch-label { flex: none; }
+  .teeth-arch-row { max-width: none; gap: 6px; }
+  .tooth { min-height: 32px; font-size: 13px; }
+}
 
-.muted { color: var(--ink-4); font-size: 12px; }
-.empty { text-align: center; padding: 48px 16px; color: var(--ink-4); }
+/* ---------- Таблицы ---------- */
+
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap table { min-width: 560px; }
+td.actions, th.actions { white-space: nowrap; }
+td.actions .btn { margin-right: 6px; }
+
+/* Узкое поле сортировки в редакторе этапов: иначе колонка «Порядок»
+ * растягивается и отодвигает всё остальное. */
+.w-sort { width: 78px; min-height: 38px !important; padding: 6px 8px !important; }
+
+/* Строка переписки в инбоксе. Три строки: кто, когда, что написано. */
+.msg-list { display: flex; flex-direction: column; gap: 10px; }
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  text-decoration: none;
+}
+.msg-row:hover { border-left-color: var(--accent); background: var(--bg-soft); }
+/* Непрочитанное выделяется цветной полосой слева: видно без счётчика. */
+.msg-row.is-new { border-left-color: var(--accent); background: var(--accent-soft); }
+.msg-row .who-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 15px;
+}
+.msg-row .when { margin-left: auto; color: var(--muted); font-size: 13px; }
+.msg-row .body { font-size: 15px; line-height: 1.45; }
+.msg-row .about { font-size: 13px; color: var(--muted); }
 
 .badge {
   display: inline-block;
-  padding: 3px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
 }
+/* Цвета этапов вынесены в классы вида s-<ключ>: новый этап, добавленный
+   администратором, получает цвет из generic-ветки ниже. */
 .s-new       { background: #e2e8f0; color: #475569; }
 .s-taken     { background: #fef3c7; color: #92400e; }
 .s-review    { background: #e0e7ff; color: #3730a3; }
@@ -247,8 +627,32 @@ main, .page { padding: 16px; max-width: 1280px; margin: 0 auto; }
 .s-finished  { background: #dcfce7; color: #166534; }
 .s-issued    { background: #d1fae5; color: #065f46; }
 .s-cancelled { background: #fee2e2; color: #991b1b; }
+/* Ключ этапа, которого нет в палитре выше: тот же тон, что у соседей. */
+.badge[class^="s-"]:not([class*=" s-new"]):not([class*=" s-taken"])
+:not([class*=" s-review"]):not([class*=" s-milled"]):not([class*=" s-baked"])
+:not([class*=" s-finished"]):not([class*=" s-issued"]):not([class*=" s-cancelled"]) {
+  background: var(--accent-soft); color: var(--accent-dark);
+}
 
 .prio { color: var(--danger); font-weight: 700; }
+
+/* Список выбранных зубов под формулой. Имя класса — tooth-chip, а не
+ * tooth: tooth занят кнопкой кликабельной формулы, и одно имя у двух
+ * разных элементов означало бы, что чип в списке вдруг становится
+ * квадратной кнопкой 34x34. */
+.teeth { display: flex; flex-wrap: wrap; gap: 6px; }
+.tooth-chip {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  border: 1px solid var(--accent-line);
+  border-radius: 7px;
+  padding: 5px 11px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+}
+.tooth-chip.x { cursor: pointer; }
+.tooth-chip.x:hover { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
 
 /* ---------- Переписка в наряде ---------- */
 
@@ -267,75 +671,184 @@ main, .page { padding: 16px; max-width: 1280px; margin: 0 auto; }
   max-width: 78%;
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 11px;
+  border-radius: 14px;
+  padding: 10px 13px;
 }
 /* Свои сообщения — справа и с акцентом: иначе в длинной переписке
    непонятно, где свои, а где ответ. */
 .msg.mine {
   align-self: flex-end;
-  background: #fff8e6;
-  border-color: #ffe0a3;
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
+.msg.unread { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); }
 .msg-head {
   display: flex;
   gap: 8px;
   align-items: baseline;
   margin-bottom: 3px;
 }
-.msg-author { font-size: 13px; font-weight: 600; }
+.msg-author { font-size: 14px; font-weight: 700; }
 /* white-space: pre-wrap — переносы строк из сообщения сохраняются,
    а длинная ссылка всё равно не растягивает ленту. */
 .msg-body {
-  font-size: 14px;
+  font-size: 15px;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: anywhere;
 }
 .msg-proposal {
-  margin-top: 7px;
-  font-size: 12.5px;
-  color: var(--ink-3);
+  margin-top: 8px;
+  font-size: 13.5px;
+  color: var(--ink-2);
 }
 .chip {
   display: inline-block;
   margin: 2px 3px 2px 0;
-  padding: 2px 7px;
-  border-radius: 9px;
-  background: #eef2f7;
-  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  font-size: 13px;
 }
-.small { font-size: 11.5px; }
 
 .chat-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
-  padding-top: 14px;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
-.chat-form textarea { width: 100%; resize: vertical; font-family: inherit; }
-.chat-form select { width: 100%; }
+.chat-form textarea, .chat-form select { width: 100%; }
 .chat-form > button { align-self: flex-start; }
 
-.flash {
-  padding: 9px 12px;
-  border-radius: 8px;
-  font-size: 13.5px;
-  margin-bottom: 12px;
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  border-radius: var(--radius-pill);
+  padding: 4px 10px;
+  font-size: 14px;
 }
-.flash.ok  { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
-.flash.err { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+/* ---------- Этапы работы ---------- */
+/*
+ * Этапы — кнопки, а не выпадающий список: техник переключает этап
+ * одним нажатием по ходу работы, список требовал выбрать значение
+ * и нажать «Записать».
+ */
+.stage-bar { display: flex; flex-wrap: wrap; gap: 8px; }
+.stage-btn {
+  padding: 9px 15px;
+  min-height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 15px;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+}
+.stage-btn:hover { border-color: var(--accent); color: var(--accent); }
+.stage-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.stage-btn.danger { border-color: var(--danger); color: var(--danger); }
+.stage-btn.danger:hover { background: var(--danger); color: #fff; }
+.stage-btn.danger.on { background: var(--danger); color: #fff; }
+
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { padding: 9px 0 9px 18px; border-left: 2px solid var(--line); position: relative; font-size: 15px; }
+.timeline li::before {
+  content: ''; position: absolute; left: -6px; top: 16px;
+  width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong);
+}
+.timeline li.now::before { background: var(--accent); }
+.timeline .when { color: var(--muted); font-size: 13px; }
+.timeline .note { color: var(--ink-2); margin-top: 2px; }
+
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 18px; }
+.kv > div { font-size: 15px; }
+.kv .k { font-size: 13px; color: var(--muted); }
+.kv .v { font-weight: 600; word-break: break-word; }
+
+/* ---------- Сообщения и уведомления ---------- */
+
+.flash {
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  margin-bottom: 14px;
+  border: 1px solid;
+}
+.flash.ok  { background: var(--ok-soft);     color: #166534; border-color: #a7f3d0; }
+.flash.err { background: var(--danger-soft); color: #991b1b; border-color: #fecaca; }
+.flash.warn{ background: var(--warn-soft);   color: #7c2d12; border-color: #fde68a; }
+
+/* Счётчик непрочитанных на плитке раздела. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inline { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.inline > .field { flex: 1 1 150px; margin-bottom: 0; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  background: #fff;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.filters .field { margin-bottom: 0; flex: 1 1 160px; }
+
+/* Плитки-счётчики на списке нарядов. */
+.tiles { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.tile {
+  flex: 1 1 110px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  text-decoration: none;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.tile:hover { border-color: var(--accent); color: var(--ink); }
+.tile.active { border-color: var(--accent); background: var(--accent-soft); }
+.tile .n { font-size: 26px; font-weight: 800; line-height: 1.1; }
+.tile .t { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.tile.active .t { color: var(--accent-dark); }
+
+.num { font-weight: 700; white-space: nowrap; }
+.small { font-size: 13px; }
 
 /* ---------- Телефон ---------- */
 
 @media (max-width: 720px) {
   .app-header h1 { font-size: 17px; }
-  .app-header .who { font-size: 12px; }
+  .app-header .who { font-size: 13px; }
   .nav-tiles { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
   .nav-tile { min-height: 56px; padding: 10px 11px; }
   .nav-tile .d { display: none; }
-  main, .page { padding: 12px; }
+  main, .page { padding: 16px 14px; }
+  h1 { font-size: 22px; }
   th.hide-sm, td.hide-sm { display: none; }
+  .btn { min-height: 42px; }
 }

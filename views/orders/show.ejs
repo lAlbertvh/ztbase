@@ -96,7 +96,7 @@
             <div class="body">
                 <div class="teeth">
                     <% order.teeth.forEach(t => { %>
-                        <span class="tooth"><%= t.tooth %></span>
+                        <span class="tooth-chip"><%= t.tooth %></span>
                     <% }); %>
                 </div>
                 <% const t0 = order.teeth[0]; %>
@@ -332,7 +332,8 @@
             <h2>Переписка</h2>
             <div class="body">
                 <% if (notice) { %><div class="flash ok"><%= notice %></div><% } %>
-                <% if (error) { %><div class="flash err"><%= error %></div><% } %>
+                <%# Пустой блок: ошибка этапов выводится у формы этапов, где её
+    можно сразу исправить. Дублировать её здесь не нужно. %>
 
                 <% if (!messages.length) { %>
                     <p class="muted">Переписки пока нет. Опишите случай или спорный момент —
@@ -401,6 +402,10 @@
         <div class="card">
             <h2>Этапы работы</h2>
             <div class="body">
+                <%# Ошибка этапов стоит здесь, а не в блоке переписки:
+                    форма этапов — единственное место, где её можно
+                    исправить, и до неё человек может не дойти. %>
+                <% if (error) { %><div class="note alert"><%= error %></div><% } %>
                 <% if (!order.stages.length) { %>
                     <p class="muted">Журнал пуст</p>
                 <% } else { %>
@@ -417,16 +422,35 @@
                 <% } %>
 
                 <% if (!isDentist) { %>
-                <form method="post" action="/orders/<%= order.id %>/stage" class="inline" style="margin-top:14px">
-                    <div><label>Перевести на этап</label>
-                        <select name="stage">
-                            <% catalog.STAGES.forEach(s => { %>
-                                <option value="<%= s.key %>" <%= order.stage === s.key ? 'selected' : '' %>><%= s.title %></option>
-                            <% }); %>
-                        </select>
+                <%#
+                    Этап отмечается кнопкой, а не выбором из списка.
+                    Список требовал двух действий: открыть выпадающий список
+                    и выбрать в нём нужный этап — а это как раз тот шаг,
+                    на котором ошибаются и пропускают работу. Кнопка
+                    нажата — этап записан.
+
+                    Заметка своя у каждой кнопки: она подставляется в поле
+                    перед отправкой, чтобы можно было написать «что
+                    сделано», не заполняя форму вручную каждый раз.
+                    Само поле остаётся — иногда заметка нужна своя.
+                %>
+                <form method="post" action="/orders/<%= order.id %>/stage" class="stage-form" data-stage-form>
+                    <label>Перевести на этап</label>
+                    <div class="stage-buttons">
+                        <% catalog.STAGES.forEach(s => { %>
+                            <button type="button"
+                                    class="btn stage-btn<%= order.stage === s.key ? ' is-current' : '' %>"
+                                    data-stage="<%= s.key %>"
+                                    aria-pressed="<%= order.stage === s.key ? 'true' : 'false' %>"><%= s.title %></button>
+                        <% }); %>
                     </div>
-                    <div style="flex:2 1 220px"><label>Заметка к этапу</label><input type="text" name="note" maxlength="2000" placeholder="Что сделано или что нужно"></div>
-                    <button class="btn btn-primary" type="submit">Записать</button>
+                    <div class="stage-note">
+                        <label>Заметка к этапу</label>
+                        <input type="text" name="note" maxlength="2000"
+                               data-stage-note placeholder="Что сделано или что нужно">
+                    </div>
+                    <button class="btn btn-primary" type="submit" data-stage-submit disabled>Записать этап</button>
+                    <p class="hint" data-stage-hint hidden>Выберите этап — заметка станет обязательной для этого перехода.</p>
                 </form>
                 <% } %>
             </div>
@@ -440,5 +464,6 @@
             <% } %>
         </div>
     </main>
+    <script src="/js/stage-buttons.js" defer></script>
 </body>
 </html>

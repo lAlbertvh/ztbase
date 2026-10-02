@@ -12,9 +12,11 @@
 const express = require('express');
 const QRCode = require('qrcode');
 const R = require('../services/dental-reference');
+const OPT = require('../services/options');
 const O = require('../services/orders');
 const M = require('../services/manipulations');
 const C = require('../services/constructions');
+const INBOX = require('../services/inbox');
 
 // Внешний адрес приложения для QR-кодов. Без него ссылка в коде была бы
 // внутренней (127.0.0.1), и камера телефона открыла бы её мимо сервера.
@@ -113,6 +115,30 @@ module.exports = function createOrderRoutes({ db, requireAdmin }) {
     // врач. Технику в скидке нет — это не его деньги.
     const canDiscount = (req) => isAdmin(req) || isDentist(req);
 
+    // Этапы и отметки по работе берём из настроек лаборатории, а не из
+    // dental-reference: администратор добавляет и переименовывает их сам
+    // в /admin/options. dental-reference остаётся источником значений
+    // по умолчанию, пока список не переопределён.
+    //
+    // Форма ожидает привычную форму dental-reference (STAGES с ключом
+    // key и названием title, FRAME_FLAG_TITLE как словарь), поэтому
+    // собираем такой же объект — иначе пришлось бы править все экраны.
+    const catalogFor = (req) => {
+      const lab = labId(req);
+      const stages = OPT.activeList(db, lab, 'stage');
+      const flags = OPT.activeList(db, lab, 'frame_flag');
+      // Короткое имя этапа берём из названия: отдельного короткого поля
+      // в настройках нет, а на списке нарядов длинные названия не помещаются.
+      const short = (title) => title.length > 12 ? title.slice(0, 11) + '…' : title;
+      return Object.assign({}, R, {
+        STAGES: stages.map(s => ({ key: s.key, title: s.title, short: short(s.title) })),
+        STAGE_TITLE: Object.fromEntries(stages.map(s => [s.key, s.title])),
+        STAGE_SHORT: Object.fromEntries(stages.map(s => [s.key, short(s.title)])),
+        FRAME_FLAGS: flags.map(f => ({ key: f.key, title: f.title })),
+        FRAME_FLAG_TITLE: Object.fromEntries(flags.map(f => [f.key, f.title])),
+      });
+    };
+
   // ---- Список нарядов ----
   router.get('/', (req, res) => {
     // Стоматолог видит наряды своей клиники, остальные — все по лаборатории.
@@ -126,6 +152,8 @@ module.exports = function createOrderRoutes({ db, requireAdmin }) {
       offset: req.query.offset,
     });
 
+    const catalog = catalogFor(req);
+
     res.render('orders/index', {
       orders: rows,
       total,
@@ -134,10 +162,11 @@ module.exports = function createOrderRoutes({ db, requireAdmin }) {
         // Счётчики этапов сужаем тем же правилом, что и список: иначе
         // врач видит в шапке объём чужой клиники.
         summary: O.stageSummary(db, labId(req),
-          isDentist(req) ? { clinicOf: dentistScope(req) } : {}),
-      stages: R.STAGES,
-      stageTitle: R.STAGE_TITLE,
-      stageShort: R.STAGE_SHORT,
+          isDentist(req) ? { clinicOf: dentistScope(req) } : {},
+          OPT.keySet(db, labId(req), 'stage')),
+      stages: catalog.STAGES,
+      stageTitle: catalog.STAGE_TITLE,
+      stageShort: catalog.STAGE_SHORT,
       workTitle: R.WORK_TITLE,
       filters: req.query,
       isDentist: isDentist(req),
@@ -154,7 +183,7 @@ router.get('/new', (req, res) => {
         teethText: '',
         materials: db.prepare('SELECT * FROM materials WHERE lab_id = ? AND active = 1 ORDER BY name').all(labId(req)),
         constructions: C.forOrderSelect(db, labId(req)),
-        catalog: R,
+        catalog: catalogFor(req),
         incoming: req.query.incoming || '',
           isDentist: isDentist(req),
           canSetPrices: canSetPrices(req),
@@ -265,7 +294,7 @@ router.get('/new', (req, res) => {
     M.addCatalogToOrder(db, labId(req), order.id, M.orderWorkKinds(db, labId(req), order.id));
     res.render('orders/manipulations', {
       order,
-      catalog: R,
+      catalog: catalogFor(req),
       isDentist: isDentist(req),
       items: M.listOrderManipulations(db, labId(req), order.id),
       counts: M.orderManipulationCounts(db, labId(req), order.id),
@@ -330,7 +359,7 @@ router.get('/new', (req, res) => {
       const isTech = req.session.role === 'tech';
       res.render('orders/show', {
         order,
-        catalog: R,
+        catalog: catalogFor(req),
         isDentist: isDentist(req),
         isTech,
         // Технику не нужна клиентская часть счёта: ни цена для врача,
@@ -345,6 +374,20 @@ router.get('/new', (req, res) => {
         chatCatalog: C.listForChat(db, labId(req)),
         notice: req.query.notice || null,
         error: req.query.error || null,
+      });
+
+      // Отметка прочтения ставится после отправки страницы, иначе
+      // человек, у которого рендер упал или перезагрузил страницу,
+      // потерял бы непрочитанные сообщения навсегда.
+      //
+      // Своим сообщениям это не вредит: непрочитанными считаются только
+      // написанные другими.
+      res.on('finish', () => {
+        try {
+          INBOX.markSeen(db, labId(req), order.id, req.session.userId);
+        } catch (err) {
+          console.error('markSeen:', err.message);
+        }
       });
     });
 
@@ -363,7 +406,7 @@ router.get('/new', (req, res) => {
         teethText: order.teeth.map(t => t.tooth).join(' '),
         materials: db.prepare('SELECT * FROM materials WHERE lab_id = ? AND active = 1 ORDER BY name').all(labId(req)),
         constructions: C.forOrderSelect(db, labId(req)),
-catalog: R,
+        catalog: catalogFor(req),
         incoming: '',
         isDentist: isDentist(req),
         canSetPrices: canSetPrices(req),
@@ -380,6 +423,8 @@ catalog: R,
       const parsed = O.parseOrderForm(req.body, {
         canSetPrices: canSetPrices(req),
         canDiscount: canDiscount(req),
+        stageKeys: OPT.keySet(db, labId(req), 'stage'),
+        flagKeys: OPT.keySet(db, labId(req), 'frame_flag'),
         // Врач пишет наряд от имени своей клиники, и подменить её в форме
         // нельзя. Администратор клинику выбирает: он ведёт наряды и за
         // клиники, в том числе принимает работы, пришедшие мимо учётных
@@ -427,10 +472,26 @@ catalog: R,
 
     const stage = (req.body.stage || '').trim();
     const note = (req.body.note || '').trim().slice(0, 2000);
-    if (!R.STAGES.some(s => s.key === stage)) {
+    // Этапы берём из настроек лаборатории: администратор мог добавить
+    // свой этап, и проверка по dental-reference его бы отвергла.
+    if (!OPT.isValid(db, labId(req), 'stage', stage)) {
       return res.status(400).send('Неизвестный этап');
     }
-      O.addStage(db, labId(req), order.id, stage, note, req.session.user);
+    // Заметка обязательна — на сервере, а не только в браузере. Пустая
+    // строка в журнале означала «этап пройден», и спросить потом, что
+    // именно сделали, было нечем.
+    //
+    // Проверка именно здесь, потому что форму можно отправить мимо
+    // клиентского скрипта: браузерная проверка снимается отключением
+    // JavaScript, а журнал этапов — документ, который потом читают.
+    if (!note) {
+      return res.redirect(`/orders/${order.id}?error=${encodeURIComponent('Напишите, что сделано на этом этапе')}`);
+    }
+      // Набор активных этапов передаём сервису: он сверяет ключ с этим
+    // списком, а не с константой из кода. Без этого администратор
+    // добавил бы этап в настройках, а отметить его было бы нельзя.
+    O.addStage(db, labId(req), order.id, stage, note, req.session.user,
+      OPT.keySet(db, labId(req), 'stage'));
       res.redirect(`/orders/${order.id}`);
     });
 
@@ -532,7 +593,7 @@ catalog: R,
     if (!maySee(req, order)) {
       return res.status(403).send('Нет доступа');
     }
-    res.render('orders/print', { order, catalog: R });
+    res.render('orders/print', { order, catalog: catalogFor(req) });
   });
 
     // ---- Печатная форма нескольких нарядов ----
@@ -547,7 +608,7 @@ catalog: R,
         .filter(Boolean)
         .filter(order => maySee(req, order));
       if (!orders.length) return res.status(404).send('Наряды не найдены');
-      res.render('orders/print-batch', { orders, catalog: R });
+      res.render('orders/print-batch', { orders, catalog: catalogFor(req) });
     });
 
   // ---- Справочник материалов ----

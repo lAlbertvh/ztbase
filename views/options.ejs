@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Этапы и отметки — ZT Lab</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="app-header">
+    <h1>Этапы и отметки</h1>
+    <span class="who"><%= currentUser %><a href="/logout">Выйти</a></span>
+</header>
+
+<main>
+<% if (notice) { %><div class="note"><%= notice %></div><% } %>
+<% if (error) { %><div class="note alert"><%= error %></div><% } %>
+
+<%#
+    Редактор настроек производства.
+
+    Этапы и отметки («maxilla» / «antagonist») хранились в коде: чтобы
+    добавить этап, нужно было попросить разработчика. Теперь список в
+    базе, и лаборатория настраивает его сама.
+
+    Скрытие не удаляет: наряд, созданный до скрытия, должен оставаться
+    читаемым, иначе он потерял бы смысл. Поэтому пункт можно скрыть из
+    новых нарядов, но нельзя стереть.
+%>
+<% kinds.forEach(function (kind) { %>
+<div class="hub-group">
+    <h2><%= kind.title %></h2>
+
+    <%#
+        Формы стоят вне таблицы, а у полей атрибут form="..." — иначе
+        таблица получилась бы вложенными формами в строках, что HTML не
+        допускает и браузер чинит по-разному.
+    %>
+    <% const editForm = 'opt-' + kind.key; %>
+
+    <div class="table-wrap">
+    <table>
+        <thead>
+            <tr><th>Порядок</th><th>Ключ</th><th>Название</th><th>Статус</th><th></th></tr>
+        </thead>
+        <tbody>
+        <% kind.items.forEach(function (i) { %>
+        <% const rowForm = editForm + '-' + i.key; %>
+        <%# Форма строки лежит в последней ячейке, а поля в первых трёх
+            ссылаются на неё атрибутом form. Форма прямо в строке таблицы
+            недопустима, а вне строки — единственный способ отправить
+            значения вместе с ключом этой строки без JavaScript. %>
+            <tr class="<%= i.active ? '' : 'muted' %>">
+                <td><input class="w-sort" form="<%= rowForm %>" name="sort" value="<%= i.sort %>" inputmode="numeric"></td>
+                <td><code><%= i.key %></code></td>
+                <td><input form="<%= rowForm %>" name="title" value="<%= i.title %>" maxlength="80"></td>
+                <td><%= i.active ? 'В работе' : 'Скрыт' %></td>
+                <td class="actions">
+                    <%# Действие задаётся кнопкой, а не скрытым полем: два
+                        поля с одним именем дают массив, и маршрут не поймёт,
+                        что выбрано. %>
+                    <form method="post" action="/options" id="<%= rowForm %>">
+                        <input type="hidden" name="kind" value="<%= kind.key %>">
+                        <input type="hidden" name="key" value="<%= i.key %>">
+                        <button class="btn btn-sm" type="submit" name="action" value="rename">Сохранить</button>
+                        <button class="btn btn-sm" type="submit" name="action"
+                                value="<%= i.active ? 'hide' : 'show' %>"><%= i.active ? 'Скрыть' : 'Вернуть' %></button>
+                    </form>
+                </td>
+            </tr>
+        <% }); %>
+        </tbody>
+    </table>
+    </div>
+</div>
+
+    <form class="form" method="post" action="/options" style="margin-top:14px">
+        <input type="hidden" name="action" value="add">
+        <input type="hidden" name="kind" value="<%= kind.key %>">
+        <div class="row">
+            <label>Ключ
+                <input name="key" required maxlength="40" placeholder="casting">
+            </label>
+            <label>Название
+                <input name="title" required maxlength="80" placeholder="Литьё">
+            </label>
+            <label>Порядок
+                <input class="w-sort" name="sort" value="0" inputmode="numeric">
+            </label>
+        </div>
+        <button class="btn btn-primary" type="submit">Добавить</button>
+    </form>
+</div>
+<% }); %>
+
+<div class="note">
+    Ключ латиницей, без пробелов — он попадает в наряды и отчётность,
+    поэтому переименование ключа сломало бы старые записи. Меняется
+    только название.
+</div>
+</main>
+
+</body>
+</html>

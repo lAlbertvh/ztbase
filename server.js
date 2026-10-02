@@ -14,9 +14,12 @@ const { migrateConstructions } = require('./src/db/constructions-schema');
 const { migrateSetup, setupPending } = require('./src/db/setup-schema');
 const createOrderRoutes = require('./src/routes/orders');
 const createSetupRoutes = require('./src/routes/setup');
+const createSectionRoutes = require('./src/routes/sections');
+const createLegalRoutes = require('./src/routes/legal');
   const license = require('./src/services/license');
   const SPEC = require('./src/services/specializations');
   const constructions = require('./src/services/constructions');
+const inbox = require('./src/services/inbox');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -556,8 +559,13 @@ app.post('/lead', (req, res) => {
 });
 
 // ------ Middleware авторизации ------
+  // /join — вход нового сотрудника по одноразовому коду. Публичный
+  // по существу: человек приходит по ссылке из мессенджера ещё без
+  // сессии. Свою проверку кода делает маршрут, а лабораторию код
+  // определяет сам — в форме её выбрать нельзя.
   const PUBLIC_PATHS = new Set([
     '/login', '/set-user', '/register', '/register-lab', '/health', '/lead', '/logout',
+    '/join', '/legal/privacy', '/legal/offer',
   ]);
 
   // Экран продления и его форма должны работать без действующей подписки.
@@ -633,9 +641,36 @@ app.use('/orders', createOrderRoutes({ db, requireAdmin }));
   // доступен только тому, кто зарегистрировал лабораторию.
   app.use('/setup', createSetupRoutes({ db, requireAdmin, hashPassword }));
 
+// ------ Разделы, не связанные с отдельным нарядом ------
+// Переписка, пользователи с кодами, уведомления и редактор этапов.
+// Маршруты лежат в корне (/messages, /users, /notifications, /options,
+// /join), поэтому подключаются без префикса.
+//
+// Правила области видиния — те же, что у нарядов: врач видит в
+// инбоксе переписку своей клиники, лаборатория — все. Иначе инбокс
+// стал бы обходным путём к чужой корреспонденции.
+// Правовые документы подключаются до проверки сессии: на них стоят
+  // ссылки в форме регистрации, и человек обязан прочитать их до того,
+  // как согласится на обработку данных. Маршруты сами по себе публичные
+  // и ничего, кроме текста, не отдают.
+  app.use(createLegalRoutes());
+
+app.use(createSectionRoutes({
+  db, requireAdmin, hashPassword,
+  labId: (req) => req.session.labId || 1,
+  isDentist: (req) => req.session.role === 'dentist',
+  // Область видимости врача копируется из маршрутов нарядов: клиника
+  // берётся из его учётной записи, а не из формы.
+  dentistScope: (req) => {
+    const row = db.prepare('SELECT clinic_id FROM users WHERE id = ? AND lab_id = ?')
+      .get(req.session.userId, req.session.labId || 1);
+    return { name: req.session.user, clinicId: row && row.clinic_id ? row.clinic_id : null };
+  },
+}));
+
 // ------ Коды приглашений ------
-// Регистрация лабораторий идёт только по коду: без этого любой из
-// интернета заводил себе лабораторию с администратором.
+// Регистрация новых сотрудников идёт по одноразовому коду внутри
+// лаборатории: /users выдаёт код, сотрудник входит на /join.
 const TRIAL = require('./src/services/trial');
 app.locals.TRIAL_DAYS = TRIAL.TRIAL_DAYS;
 
@@ -886,7 +921,57 @@ app.post('/trial/renew', (req, res) => {
 
 
 // Главная страница (с перенаправлением для Елены и динамическим поиском)
-app.get('/', async (req, res) => {
+// Хаб приложения: точка входа после входа. Раньше на '/' стоял обмен
+// файлами, и человек, открывая программу, попадал в случайный раздел.
+// Теперь '/' — меню разделов, а обмен файлами живёт на '/files'.
+app.get('/', (req, res) => {
+  const labId = req.session.labId || 1;
+  const isDentist = req.session.role === 'dentist';
+  const isAdmin = req.session.role === 'admin';
+
+  // Счётчики на плитках: человек должен видеть, что ждёт его внимания,
+  // не заходя в каждый раздел по очереди.
+  const one = (sql, ...p) => db.prepare(sql).get(labId, ...p).n;
+
+  const orders = isDentist
+    ? db.prepare(`
+        SELECT COUNT(*) AS n FROM orders
+        WHERE lab_id = ?
+          AND stage NOT IN ('issued','cancelled')
+          AND (clinic_id IS NOT NULL AND clinic_id = (
+                SELECT clinic_id FROM users WHERE id = ? AND lab_id = ?)
+               OR created_by = ?)
+      `).get(labId, req.session.userId, labId, req.session.user).n
+    : one("SELECT COUNT(*) AS n FROM orders WHERE lab_id = ? AND stage NOT IN ('issued','cancelled')");
+
+  const files = one('SELECT COUNT(*) AS n FROM files WHERE lab_id = ? AND downloaded = 0');
+
+  // Непрочитанные переписки считает тот же сервис, что и инбокс.
+  // Дублировать запрос здесь нельзя: счётчик на хабе обязан считать
+  // ровно то же, что человек потом увидит в /messages. Иначе врач
+  // получает на главной непрочитанные по чужим клиникам, до которых
+  // в инбоксе не дотянуться.
+  const ownClinic = isDentist
+    ? db.prepare('SELECT clinic_id FROM users WHERE id = ? AND lab_id = ?')
+      .get(req.session.userId, labId)
+    : null;
+  const scope = isDentist
+    ? { name: req.session.user, clinicId: ownClinic ? ownClinic.clinic_id : null }
+    : null;
+  const unread = inbox.unreadTotal(db, labId, req.session.userId, scope);
+
+  res.render('hub', {
+    currentUser: req.session.user,
+    isAdmin, isDentist,
+    counters: { orders, files, unread },
+    usage: isAdmin ? license.usage(db, labId) : null,
+    setupPendingHere: isAdmin && setupPending(db, labId),
+  });
+});
+
+// Обмен файлами. Раньше этот экран занимал '/', и из-за него навигация
+// начиналась со случайного раздела.
+app.get('/files', async (req, res) => {
   const { date, uploader, downloaded, filename } = req.query;
 
   let sql = 'SELECT * FROM files';

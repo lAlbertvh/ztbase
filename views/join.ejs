@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Вход по коду — ZT Lab</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<header class="app-header">
+    <h1>Вход в лабораторию</h1>
+    <span class="who"><a href="/login">Вход по паролю</a></span>
+</header>
+
+<main class="narrow">
+<%#
+    Вход нового сотрудника по одноразовому коду.
+
+    Страница публичная: человек приходит по ссылке из мессенджера и ещё
+    ничего не знает о лаборатории. Лабораторию в форме нет — её
+    определяет сам код. Иначе можно было бы вписать чужую и войти в
+    неё действительным кодом другой лаборатории.
+
+    Код приходит в ссылке (?code=...), поэтому поле заполняется само.
+%>
+<% if (error) { %><div class="note alert"><%= error %></div><% } %>
+
+<form class="form" method="post" action="/join">
+    <label>Ваше имя
+        <input name="username" required maxlength="60" autocomplete="name" autofocus placeholder="Как вас зовут">
+    </label>
+
+    <label>Код от администратора
+        <input name="code" required maxlength="24" value="<%= code %>" autocomplete="one-time-code"
+               autocapitalize="characters" spellcheck="false" placeholder="ABCD2345"
+               style="text-transform:uppercase;letter-spacing:2px">
+    </label>
+
+    <label>Придумайте пароль
+        <input type="password" name="password" required minlength="6" autocomplete="new-password"
+               placeholder="Не короче 6 символов">
+    </label>
+
+    <button class="btn btn-primary" type="submit">Войти</button>
+</form>
+
+<div class="note">
+    Код выдаёт администратор лаборатории в разделе «Пользователи». Он действует
+    7 дней и срабатывает один раз — сразу выдайте новый.
+</div>
+
+<div class="note">
+    Уже есть пароль? <a href="/login">Войти обычным способом</a>
+</div>
+</main>
+
+</body>
+</html>

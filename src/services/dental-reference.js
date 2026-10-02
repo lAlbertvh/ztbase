@@ -48,6 +48,10 @@ const STAGES = [
 // Взяты из бланка заказ-наряда фрезерного центра: такие пометки
 // техник проставляет постоянно, и в бумажном виде они идут отдельной
 // строкой печати.
+//
+// Список отдаётся приложению по умолчанию и копируется в lab_options
+// при первом запуске: дальше администратор правит его сам в
+// /admin/options. Правьте там, а не здесь.
 const ABUTMENT_OPTIONS = [
   { key: 'final',    title: 'Финальная обработка' },
   { key: 'shoulder05', title: 'Погружение уступа 0,5 мм' },
@@ -56,7 +60,7 @@ const ABUTMENT_OPTIONS = [
 
 const FRAME_FLAGS = [
   { key: 'repeat',      title: 'Повторение' },
-  { key: 'maxilla',     title: 'Maxilla' },
+  { key: 'antagonist',  title: 'Антагонист' },
   { key: 'processing',  title: 'Обработка' },
   { key: 'reduce',      title: 'Редуцировать под каркас' },
   { key: 'try_in',      title: 'Припасовка' },

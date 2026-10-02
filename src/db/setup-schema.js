@@ -47,6 +47,50 @@ function migrateSetup(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_clinic_contacts_clinic
       ON clinic_contacts(clinic_id, active);
+
+    -- Одноразовые коды для входа нового сотрудника в лабораторию.
+    --
+    -- Администратор не знает пароль будущего сотрудника и не должен
+    -- его придумывать за него: код выдаётся на бумаге или в мессенджере,
+    -- сотрудник сам приходит на /join, вводит имя, код и свой пароль.
+    -- Код действует только внутри выдавшей его лаборатории, поэтому
+    -- подделать его из другой лаборатории нельзя, а перебрать — ещё и
+    -- медленно: код одноразовый и с коротким сроком жизни.
+    CREATE TABLE IF NOT EXISTS invite_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      -- Роль и специализация заранее задаёт администратор: сотрудник
+      -- не выбирает себе права, он их получает вместе с кодом.
+      role TEXT NOT NULL DEFAULT 'tech',
+      specialization TEXT,
+      note TEXT,
+      code_hash TEXT NOT NULL,
+      created_by INTEGER,
+      -- Срок жизни кода. По умолчанию неделя: код живёт ровно столько,
+      -- сколько нужно, чтобы передать его человеку, и не дольше.
+      expires_at TEXT,
+      used_at TEXT,
+      used_by INTEGER,
+      used_name TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_invite_codes_lab
+      ON invite_codes(lab_id, used_at, expires_at);
+
+    -- Настройки интерфейса лаборатории: этапы заказа и отметки по
+    -- работе. Раньше оба списка были зашиты в код, и добавить этап
+    -- «Сканирование» или отметку «Антагонист» можно было только
+    -- правкой файла с последующим деплоем.
+    CREATE TABLE IF NOT EXISTS lab_options (
+      lab_id INTEGER NOT NULL,
+      kind TEXT NOT NULL,      -- 'stage' | 'frame_flag'
+      key TEXT NOT NULL,
+      title TEXT NOT NULL,
+      sort INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      PRIMARY KEY (lab_id, kind, key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_lab_options ON lab_options(lab_id, kind, active, sort);
   `);
 
   // Контакт клиники может позже получить учётную запись. Ссылка нужна,

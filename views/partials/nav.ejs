@@ -1,41 +1,43 @@
 <%
 /*
- * Общая навигация по разделам. Подключается на всех экранах через
+ * Навигация по разделам. Подключается на рабочих экранах через
  * include 'partials/nav' с параметрами active, inline, currentUser,
  * isDentist.
  *
- * Раньше навигация жила в шапке каждого экрана и отличалась от экрана к
- * экрану: на карточке наряда вообще не было ссылки ни на обмен файлами,
- * ни на титановые основания. Теперь разделы одинаковые везде и крупные.
+ * Раньше здесь стояли три плитки, а с карточки наряда нельзя было
+ * попасть ни в обмен файлами, ни в сообщения. Теперь переходы
+ * соответствуют разделам хаба на '/', и набор один на всех экранах.
+ *
+ * Эмодзи убраны намеренно: на цветных плитках они выглядели как
+ * разные проекты, а на телефоне занимали место и мешали читать подпись.
+ * Различать разделы цветом полосы слева и подписью достаточно.
  */
 const items = [
-  { key: 'orders', href: '/orders',        ico: '📋', t: 'Заказ-наряды',   d: 'Список и создание', accent: 'orders' },
-  { key: 'files',  href: '/',              ico: '📁', t: 'Обмен файлами',  d: 'STL, сканы, фото',   accent: 'files'  },
+  { key: 'orders',  href: '/orders',     t: 'Заказ-наряды', d: 'Список и этапы',        accent: 'orders' },
+  { key: 'chat',    href: '/messages',   t: 'Сообщения',    d: 'Переписка по нарядам', accent: 'orders' },
+  { key: 'files',   href: '/files',      t: 'Файлы',        d: 'STL, сканы, фото',     accent: 'files'  },
 ];
 if (!isDentist) {
-  items.push({ key: 'titan', href: '/titan', ico: '🔩', t: 'Титановые основания', d: 'Учёт и печать', accent: 'titan' });
+  items.push({ key: 'titan', href: '/titan', t: 'Титановые основания', d: 'Учёт и печать', accent: 'titan' });
 }
-// Плишка настроек приложения — только у администратора лаборатории.
-// Технику разделы со справочниками и ценами недоступны, поэтому
-// показывать ему ссылку означало бы просто уводить в 403.
-// Настройки сайта (лендинга) здесь намеренно не упомянуты: у них
-// отдельная админка с собственным паролем.
 if (isAdmin) {
-  items.push({ key: 'admin', href: '/admin', ico: '⚙️', t: 'Настройки приложения', d: 'Справочники и сотрудники', accent: 'admin' });
+  items.push({ key: 'admin', href: '/admin', t: 'Настройки', d: 'Приложение и команда', accent: 'admin' });
 }
 %>
 <nav class="nav-tiles<%= inline ? ' nav-tiles-inline' : '' %>">
+  <a class="nav-tile<%= active === 'home' ? ' is-active' : '' %>" data-accent="orders" href="/">
+    <span class="t">В меню</span>
+    <span class="d">Все разделы</span>
+  </a>
   <% items.forEach(function (i) { %>
     <a class="nav-tile<%= active === i.key ? ' is-active' : '' %>"
        data-accent="<%= i.accent %>" href="<%= i.href %>">
-      <span class="ico" aria-hidden="true"><%= i.ico %></span>
       <span class="t"><%= i.t %></span>
       <span class="d"><%= i.d %></span>
     </a>
   <% }); %>
   <% if (!isDentist) { %>
     <a class="nav-tile" data-accent="new" href="/orders/new">
-      <span class="ico" aria-hidden="true">✚</span>
       <span class="t">Новый наряд</span>
       <span class="d">Создать заказ-наряд</span>
     </a>

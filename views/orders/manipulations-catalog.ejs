@@ -16,6 +16,16 @@
         tr.off td { background: #fafafa; }
         .edit { display: flex; gap: 6px; align-items: center; }
         .edit input, .edit select { padding: 5px 7px; font-size: 13px; }
+        /* Чекбокс обязательности в строке справочника. Он не должен
+           выглядеть как поле ввода: это переключатель, а не значение. */
+        .req-check {
+            display: inline-flex; align-items: center; gap: 6px;
+            flex: 0 0 auto; margin: 0; padding: 5px 9px;
+            border: 1px solid var(--line); border-radius: 8px;
+            background: #fff; font-size: 13px; color: var(--ink-2);
+            white-space: nowrap; cursor: pointer;
+        }
+        .req-check input { width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; accent-color: var(--accent); }
     </style>
 </head>
 <body>
@@ -57,11 +67,19 @@
                 <label>Цена, ₽</label>
                 <input name="price" type="number" min="0" step="0.01" value="0">
             </div>
+            <%# По умолчанию обязательная: забытый шаг должен быть виден
+                в чек-листе наряда. %>
+            <label class="check req-check">
+                <input type="checkbox" name="required" value="1" checked>
+                обязательно
+            </label>
             <button class="btn btn-primary" type="submit">Добавить</button>
         </form>
         <p class="muted" style="margin:0">
             Цена попадает в расчёт зарплаты. Пока она 0, отчёт покажет
-            количество манипуляций, но не суммы.
+            количество манипуляций, но не суммы. Обязательная позиция
+            подсвечивается в чек-листе наряда, пока не отмечена, но
+            выпуск наряда не блокирует.
         </p>
     </div>
 
@@ -93,6 +111,14 @@
                             </select>
                             <input name="price" type="number" min="0" step="0.01" value="<%= m.price %>" style="flex:0 0 100px">
                             <input type="hidden" name="active" value="<%= m.active %>">
+                            <%# Обязательность: в наряде такая позиция подсвечивается,
+                                пока не отмечена. Снятие обязательности
+                                действует только на новые наряды — уже созданные
+                                хранят признак на момент поступления. %>
+                            <label class="check req-check">
+                                <input type="checkbox" name="required" value="1" <%= m.required ? 'checked' : '' %>>
+                                обязательно
+                            </label>
                             <button class="btn btn-sm" type="submit">Сохранить</button>
                         </form>
                     </td>
