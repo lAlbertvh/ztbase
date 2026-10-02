@@ -329,6 +329,25 @@ app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, linklocal, uniquelo
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// Статика должна стоять выше middleware ниже, который насильно
+// проставляет Content-Type: text/html. express.static тип файла
+// выбирает сам, но только если заголовок ещё не задан, — иначе все
+// файлы из public/ уходили к браузеру как html: стиль отвергался,
+// манифест и sw.js не проходили проверку типа, service worker не
+// регистрировался вовсе.
+app.use(express.static(publicDir));
+
+// Картинки, загруженные через /admin/content, лежат в каталоге данных
+// (/var/lib/ztlab/content/img), а не в папке кода: обновление через
+// deploy.sh не должно затирать загруженное, и при ProtectSystem=strict
+// в /opt вообще нельзя писать. Адрес прежний — /public/content, —
+// чтобы значения, уже сохранённые в site.json, продолжали работать.
+const contentImgDir = path.resolve(
+  process.env.CONTENT_IMG_DIR || path.join(publicDir, 'content')
+);
+app.use('/public/content', express.static(contentImgDir));
+
 app.use((req, res, next) => {
   const isFileRoute = req.path.startsWith('/image/') || req.path.startsWith('/download');
   if (!isFileRoute) {
@@ -365,18 +384,6 @@ app.use(session({
     secure: process.env.COOKIE_SECURE === '1'
   }
 }));
-
-app.use(express.static(publicDir));
-
-// Картинки, загруженные через /admin/content, лежат в каталоге данных
-// (/var/lib/ztlab/content/img), а не в папке кода: обновление через
-// deploy.sh не должно затирать загруженное, и при ProtectSystem=strict
-// в /opt вообще нельзя писать. Адрес прежний — /public/content, —
-// чтобы значения, уже сохранённые в site.json, продолжали работать.
-const contentImgDir = path.resolve(
-  process.env.CONTENT_IMG_DIR || path.join(publicDir, 'content')
-);
-app.use('/public/content', express.static(contentImgDir));
 
 // Браузер не должен сохранять страницы с заказами на диск: после выхода
 // из аккаунта данные остались бы в кэше и могли бы попасть в поле зрения
