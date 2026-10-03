@@ -59,9 +59,13 @@ if command -v nginx >/dev/null 2>&1; then
   # Порт 80 отдаёт 301 на HTTPS, поэтому идём по редиректу. --resolve
   # заставляет www смотреть в 127.0.0.1:443: проверяем собственный
   # vhost nginx, не завися от публичного DNS и маршрутизации наружу.
-  if curl -sL --max-time 10 --resolve "${WWW}:443:127.0.0.1" \
+  # Код ответа забираем в переменную, а не конвейером: grep -q выходит
+  # сразу после совпадения и обрывает curl по SIGPIPE, а pipefail
+  # считает это ошибкой — проверка мигала между «ОК» и «ОШИБКА».
+  UPSTREAM_CODE="$(curl -sL --max-time 10 --resolve "${WWW}:443:127.0.0.1" \
        -o /dev/null -w '%{http_code}' -H "Host: ${WWW}" \
-       "http://127.0.0.1/health" | grep -q '^200$'; then
+       "http://127.0.0.1/health" || true)"
+  if [[ "$UPSTREAM_CODE" == "200" ]]; then
     ok "nginx достучался до приложения через upstream"
   else
     bad "nginx не достучался. Проверьте upstream в /etc/nginx/sites-enabled/ztlab"
@@ -105,7 +109,12 @@ info "5. Вход в боевом режиме (самое частое мест
 # не выдаётся и при сломанном, и при исправном nginx — проверка всегда
 # бы ругалась и ни о чём бы не говорила. Поэтому проверяем то, от чего
 # cookie зависит на самом деле.
-if nginx -T 2>/dev/null | grep -qE 'proxy_set_header[[:space:]]+X-Forwarded-Proto[[:space:]]+\$scheme'; then
+# Конфигурацию nginx читаем целиком в переменную. Через конвейер
+# `nginx -T | grep -q` проверка врёт: grep выходит после первого
+# совпадения, nginx получает SIGPIPE, и при pipefail условие выглядит
+# неверным — на живом сервере это давало случайные «ОШИБКА» через раз.
+NGINX_CONF="$(nginx -T 2>/dev/null || true)"
+if grep -qE 'proxy_set_header[[:space:]]+X-Forwarded-Proto[[:space:]]+\$scheme' <<<"$NGINX_CONF"; then
   ok "nginx передаёт X-Forwarded-Proto — Secure-cookie будет принят"
 else
   bad "nginx не передаёт X-Forwarded-Proto. Добавьте в location: proxy_set_header X-Forwarded-Proto \$scheme;"
