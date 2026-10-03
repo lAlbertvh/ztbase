@@ -13,10 +13,14 @@ const { migrateOrders } = require('./src/db/orders-schema');
 const { migrateManipulations } = require('./src/db/manipulations-schema');
 const { migrateConstructions } = require('./src/db/constructions-schema');
 const { migrateSetup, setupPending } = require('./src/db/setup-schema');
+const { migrateMail } = require('./src/db/mail-schema');
+const RESET = require('./src/services/password-reset');
+const mailer = require('./src/services/mailer');
 const createOrderRoutes = require('./src/routes/orders');
 const createSetupRoutes = require('./src/routes/setup');
 const createSectionRoutes = require('./src/routes/sections');
 const createLegalRoutes = require('./src/routes/legal');
+const createPasswordRoutes = require('./src/routes/password');
   const license = require('./src/services/license');
   const SPEC = require('./src/services/specializations');
   const constructions = require('./src/services/constructions');
@@ -234,6 +238,10 @@ migrateConstructions(db);
     // Идемпотентна, добавляет недостающие колонки в labs.
     migrateSetup(db);
     console.log('Схема настройки готова');
+
+    // Одноразовые ссылки для входа и восстановления пароля.
+    migrateMail(db);
+    console.log('Схема писем готова');
 
   const userCount = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (userCount === 0) {
@@ -593,6 +601,10 @@ app.post('/lead', (req, res) => {
   const PUBLIC_PATHS = new Set([
     '/login', '/set-user', '/register', '/register-lab', '/health', '/lead', '/logout',
     '/join', '/legal/privacy', '/legal/offer',
+    // Восстановление пароля приходит по ссылке из письма, то есть
+    // до всякой сессии. Саму ссылку проверяет маршрут, а форма запроса
+    // открыта всем: иначе забытый пароль нельзя было бы восстановить.
+    '/password/reset', '/password/set',
   ]);
 
   // Экран продления и его форма должны работать без действующей подписки.
@@ -722,6 +734,11 @@ app.get('/admin', requireAdmin, (req, res) => {
 app.use('/admin/content', require('./src/routes/content-admin'));
 
 // ------ Маршруты ------
+
+// Восстановление пароля и вход по одноразовой ссылке. Маршруты
+// публичные, но бесполезны без ссылки из письма: её хранит только
+// хэш, поэтому по содержимому базы войти нельзя.
+app.use(createPasswordRoutes({ db, hashPassword, attemptsFor }));
 
 // Страница входа
 app.get('/login', async (req, res) => {
@@ -957,6 +974,21 @@ app.post('/trial/renew', (req, res) => {
     // Телефон мог не распознаться. На следующей странице один раз
     // покажем это и снимем, иначе сообщение так и не появится.
     if (contact.warning) req.session.notice = contact.warning;
+
+    // Данные для входа уходят на указанную при регистрации почту.
+    // Пароль в письме не пересылаем: вместо него — одноразовая
+    // ссылка, по которой человек задаст пароль заново, если
+    // потеряет свой. Лаборатория и сотрудник к этому моменту уже
+    // созданы, поэтому письмо — только подсказка, и его ошибка не
+    // должна превращать успешную регистрацию в 500.
+    const { token: welcomeToken } = RESET.createReset(db, req.session.userId);
+    await mailer.send(mailer.welcomeMail({
+      to: contact.email,
+      labSlug: slug,
+      username: userName,
+      link: `${mailer.originFor(req)}/password/set?token=${encodeURIComponent(welcomeToken)}`,
+    }));
+
     res.redirect('/');
   } catch (err) {
     console.error(err);

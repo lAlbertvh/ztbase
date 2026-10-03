@@ -43,6 +43,7 @@
             <input type="password" id="password" name="password" required autocomplete="current-password">
             <button type="submit">Войти</button>
         </form>
+        <div class="muted"><a href="/password/reset<%= preslug ? '?lab=' + encodeURIComponent(preslug) : '' %>">Забыли пароль?</a></div>
         <div class="muted">Новая лаборатория? <a href="/register">Зарегистрироваться</a></div>
     </div>
     <script>
