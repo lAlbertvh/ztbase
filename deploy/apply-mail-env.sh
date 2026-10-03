@@ -21,6 +21,11 @@ SERVICE="${SERVICE:-ztlab}"
 
 KEYS=(SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD SMTP_FROM)
 
+# SMTP_FROM можно не указывать: приложение возьмёт адрес отправителя
+# из SMTP_USER. Для Gmail это даже правильнее — отправитель должен
+# совпадать с ящиком, из которого идёт письмо, иначе оно уходит в спам.
+OPTIONAL_KEYS=(SMTP_FROM)
+
 if [[ ! -f "$SECRETS_FILE" ]]; then
   echo "Нет файла $SECRETS_FILE" >&2
   echo "Создайте его, заполните SMTP_* и повторите." >&2
@@ -45,6 +50,9 @@ values=()
 for key in "${KEYS[@]}"; do
   value="$(read_secret "$key")"
   if [[ -z "$value" ]]; then
+    if [[ " ${OPTIONAL_KEYS[*]-} " == *" $key "* ]]; then
+      continue
+    fi
     missing+=("$key")
     continue
   fi
