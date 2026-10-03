@@ -12,7 +12,7 @@ const path = require('path');
 const http = require('http');
 
 const ROOT = path.join(__dirname, '..');
-const PORT = Number(process.env.TEST_PORT) || 3201;
+const PORT = Number(process.env.TEST_PORT) || 3202;
 const BASE = `http://127.0.0.1:${PORT}`;
 const TMP = '/tmp/opencode/password-test';
 

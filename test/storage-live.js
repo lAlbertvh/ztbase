@@ -14,7 +14,7 @@ const os = require('os');
 const fs = require('fs');
 
 const ROOT = path.join(__dirname, '..');
-const PORT = Number(process.env.TEST_STORAGE_PORT) || 3199;
+const PORT = Number(process.env.TEST_STORAGE_PORT) || 3203;
 const BASE = `http://127.0.0.1:${PORT}`;
 const TMP = '/tmp/opencode/storage-live-test';
 const UPLOADS = path.join(TMP, 'up');
