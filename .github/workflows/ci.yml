@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Две задачи выполняются независимо, но деплой ждёт обе: быстрые юнит-тесты
+# дают ответ за секунды, живые поднимают сервер и идут дольше.
+jobs:
+  unit:
+    name: Юнит-тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Юнит-тесты
+        run: npm run test:unit
+
+  live:
+    name: Живые тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Живые тесты
+        run: |
+          npm run test:live \
+            && npm run test:storage \
+            && npm run test:setup \
+            && npm run test:chat \
+            && npm run test:clinics
+
+  deploy-check:
+    name: Синтаксис скриптов развёртывания
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Скрипты из deploy/ исполняются от root на боевой машине. Опечатка
+      # в них не проявится при разработке — только при выкладке, когда
+      # сервис уже остановлен, поэтому проверяем синтаксис отдельно.
+      - name: bash -n по всем скриптам
+        run: |
+          found=0
+          for f in deploy/*.sh deploy/*.service deploy/*.timer; do
+            [ -e "$f" ] || continue
+            case "$f" in
+              *.sh) bash -n "$f" || { echo "Ошибка синтаксиса: $f"; exit 1; } ;;
+              *)    grep -qP '^\s*(ExecStart|ExecStop|ExecStartPre)=' "$f" \
+                       || grep -q '^\[' "$f" \
+                       || { echo "Похоже, не unit-файл systemd: $f"; exit 1; } ;;
+            esac
+            found=$((found + 1))
+          done
+          echo "проверено файлов: $found"

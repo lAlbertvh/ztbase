@@ -11,6 +11,7 @@
     "test:quota": "node test/quota-unit.js",
     "test:storage": "node test/storage-live.js",
     "test:live": "node test/orders-live.js",
+    "test:setup": "node test/setup-live.js",
     "test:chat": "node test/chat-live.js",
     "test:clinics": "node test/clinics-live.js && node test/password-live.js",
     "start": "node server.js",
