@@ -6,6 +6,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
+const cfg = require('./src/config');
+const { hashPassword, verifyPassword } = require('./src/lib/password');
 const { storage, uniqueName, BACKEND } = require('./src/services/storage');
 const quota = require('./src/services/quota');
 const SqliteStore = require('./src/services/session-store');
@@ -27,63 +29,22 @@ const createPasswordRoutes = require('./src/routes/password');
 const inbox = require('./src/services/inbox');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = cfg.PORT;
 
-// ------ Определяем корневую папку приложения ------
-// В собранном exe (pkg) данные кладём рядом с исполняемым файлом,
-// в dev-режиме — рядом с исходниками
-const appRoot = process.pkg
-  ? path.dirname(process.execPath)
-  : path.resolve(__dirname);
-
-// Папка с шаблонами: в exe — внутри бандла (__dirname), в dev — как обычно
-const viewsDir = process.pkg
-  ? path.join(__dirname, 'views')
-  : path.join(appRoot, 'views');
-
-// Папка со статикой (PWA: манифест, иконки, сервис-воркер)
-const publicDir = process.pkg
-  ? path.join(__dirname, 'public')
-  : path.join(appRoot, 'public');
+// Корневые папки, порт и лимиты описаны в src/config.js: там же —
+// почему шаблоны в собранном exe ищутся по внутреннему пути бандла,
+// а данные кладутся рядом с самим .exe.
+const appRoot = cfg.appRoot;
+const viewsDir = cfg.viewsDir;
+const publicDir = cfg.publicDir;
+const uploadDir = cfg.uploadDir;
+const dbDir = cfg.dbDir;
+const tmpUploadDir = cfg.tmpUploadDir;
+const MAX_FILE_MB = cfg.MAX_FILE_MB;
 
 console.log('Корневая папка приложения:', appRoot);
-
-// Пути к папкам с данными.
-//
-// По умолчанию они лежат рядом с кодом, что удобно при разработке.
-// В бою их лучше вынести в отдельный каталог (например /var/lib/ztlab):
-// тогда обновление кода через git или rsync не задевает данные,
-// а резервную копию снимать проще — одной командой.
-const uploadDir = path.resolve(process.env.UPLOAD_DIR || path.join(appRoot, 'uploads'));
-const dbDir = path.resolve(process.env.DB_DIR || path.join(appRoot, 'database'));
-
-for (const dir of [uploadDir, dbDir]) {
-  fs.mkdirSync(dir, { recursive: true });
-}
 if (!process.env.UPLOAD_DIR) {
   console.log('Создана папка для загрузок:', uploadDir);
-}
-
-// ------ Хэширование паролей ------
-// scrypt из стандартной библиотеки Node: не нужно тянуть bcrypt,
-// и он устойчив к перебору. Формат: scrypt$<соль>$<хэш>
-const crypto = require('crypto');
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `scrypt$${salt}$${hash}`;
-}
-
-function verifyPassword(password, stored) {
-  if (!stored) return false;
-  const parts = stored.split('$');
-  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
-  const [, salt, hash] = parts;
-  const candidate = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, 'hex');
-  if (candidate.length !== expected.length) return false;
-  return crypto.timingSafeEqual(candidate, expected);
 }
 
 // ------ Подключение к SQLite ------
@@ -418,14 +379,7 @@ app.set('views', viewsDir);
 // Причина: STL полной дуги весит 50-150 МБ, и держать их в памяти нельзя.
 // После загрузки storage.put() переносит файл в папку лаборатории
 // (или в облако, если STORAGE_BACKEND=s3).
-// Папка для промежуточных файлов при загрузке. В системном сервисе
-// путь задаётся переменной: с ProtectSystem=strict писать внутрь
-// /opt нельзя, поэтому временные файлы живут рядом с базой.
-const tmpUploadDir = process.env.TMP_UPLOAD_DIR || path.join(appRoot, 'tmp-uploads');
-if (!fs.existsSync(tmpUploadDir)) {
-  fs.mkdirSync(tmpUploadDir, { recursive: true });
-  console.log('Создана временная папка для загрузок:', tmpUploadDir);
-}
+// Папка tmpUploadDir создаётся в src/config.js при загрузке модуля.
 
 const multerStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -443,11 +397,8 @@ const multerStorage = multer.diskStorage({
     cb(null, uniqueName(decodedName));
   }
 });
-// Предел на один файл. Без него любой вошедший сотрудник мог залить
-// на диск файл любого размера и забить ноутбук; файлы идут во временную
-// папку и удаляются только после успешной загрузки. 100 МБ — с запасом
-// для сканирования в высоком разрешении.
-const MAX_FILE_MB = Number(process.env.MAX_FILE_MB || 100);
+// Предел на один файл задаётся в src/config.js: без него любой вошедший
+// сотрудник мог залить на диск файл любого размера и забить машину.
 
 const upload = multer({
   storage: multerStorage,
