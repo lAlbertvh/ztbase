@@ -1,0 +1,53 @@
+# Переносы строк
+#
+# Причина: без этого правила правка файла в редакторе с CRLF (Windows,
+#某些 редакторы по умолчанию) превращала строки в CRLF, и git видел
+# изменение в каждой строке файла. Diff состоял из пустых строк,
+# ревью становилось нечитаемым, а настоящее изменение терялось в шуме.
+#
+# text=auto означает: git сам определит текстовый файл и приведёт его
+# к LF в индексе. На диске разработчика останется его родной перенос,
+# но сравнение и слияние будут по LF.
+* text=auto
+
+# Файлы, где перенос строк осмыслен и должен быть ровно LF
+*.js    text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.ejs   text eol=lf
+*.md    text eol=lf
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.nvmrc text eol=lf
+
+# Windows-версии скриптов запуска: CRLF обязателен, иначе cmd
+# не поймёт файл и выдаст ошибку при запуске.
+*.bat  text eol=crlf
+
+# Двоичные файлы: git не должен пытаться их нормализовать
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.stl  binary
+*.zip  binary
+*.xlsx binary
+*.pdf  binary
+
+# Архивы и собранные файлы — не трогать содержимое
+*.db       binary
+*.db-wal   binary
+*.db-shm   binary
+*.db-journal binary
+
+# Сборочные артефакты и пребилды родного модуля better-sqlite3:
+# пути различаются на разных машинах, и в историю они попадать не должны.
+node_modules/  -text -diff
+dist/          -text -diff
+prebuilds/     -text -diff binary
+
+# Картинки и содержимое сайта тоже могут обновляться из deploy
+uploads/  -text -diff
+database/ -text -diff
