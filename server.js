@@ -22,6 +22,10 @@ const createTitanRoutes = require('./src/routes/titan');
 const createHubRoutes = require('./src/routes/hub');
 const createFilesRoutes = require('./src/routes/files');
 const createUsersRoutes = require('./src/routes/users');
+const createHealthRoutes = require('./src/routes/health');
+const createLeadRoutes = require('./src/routes/lead');
+const createAuthPageRoutes = require('./src/routes/auth-pages');
+const createTrialRoutes = require('./src/routes/trial');
 const license = require('./src/services/license');
 const SPEC = require('./src/services/specializations');
 const constructions = require('./src/services/constructions');
@@ -189,99 +193,9 @@ const upload = multer({
 
 // Проверка живости. Не требует входа и не отдаёт никаких данных.
 // nginx и systemd используют её, чтобы понять, поднялся ли процесс.
-app.get('/health', (req, res) => {
-  let dbOk = true;
-  try {
-    db.prepare('SELECT 1').get();
-  } catch (e) {
-    dbOk = false;
-  }
-  const ok = dbOk ? 'ok' : 'db-error';
-  // Видимый адрес нужен только при настройке: по нему видно, проходит ли
-  // nginx и какой реальный IP сотрудника. В бою адрес не отдаём.
-  const body = { status: ok, uptime: Math.round(process.uptime()) };
-  if (!IS_PROD) body.ip = req.ip;
-  res.status(dbOk ? 200 : 503).json(body);
-});
-
-let lastLeadAt = 0;
-
-// ------ Заявка с лендинга ------
-// Форма на ztbase.ru обещает, что заявки придут в мессенджер, поэтому
-// заявка уходит в Telegram: почта на домене не работает, а бот работает.
-app.post('/lead', (req, res) => {
-  // Медленная проверка: обычная отсекает ботов почти полностью, honeypot
-  // добивает тех, кто отправляет форму не из браузера.
-  const hp = (req.body && req.body.website) || '';
-  if (hp) return res.status(200).send('ok');
-
-  const now = Date.now();
-  if (now - (lastLeadAt || 0) < 2000) {
-    return res.status(429).send('Слишком часто. Подождите пару секунд и отправьте ещё раз.');
-  }
-  lastLeadAt = now;
-
-  const clean = (v, max) => String(v == null ? '' : v).trim().slice(0, max || 300);
-  const name = clean(req.body.name, 120);
-  const contact = clean(req.body.contact, 160);
-  const message = clean(req.body.message, 2000);
-
-  // Без контакта заявку некуда обработать: телефона и почты может не быть.
-  if (!name || !contact) {
-    return res.status(400).send('Укажите имя и способ связи');
-  }
-
-  const lines = [
-    'Новая заявка с сайта',
-    '',
-    `Имя: ${name}`,
-    `Связь: ${contact}`,
-  ];
-  if (message) lines.push('', `Сообщение: ${message}`);
-  const text = lines.join('\n');
-
-  const { send, configured } = require('./src/services/telegram');
-
-  // В отличие от уведомлений о нарядах, здесь ждать ответа Telegram нужно:
-  // посетителю нельзя показать «отправлено», если заявка никуда не ушла.
-  // Одна повторная попытка — маршрут до Telegram местами подвисает.
-  const deliver = async () => {
-    if (!configured) return { skipped: true };
-    let last = {};
-    for (let attempt = 0; attempt < 2; attempt++) {
-      last = await send(text, { timeoutMs: 10000 });
-      if (last.status === 200) return last;
-      await new Promise(r => setTimeout(r, 1200));
-    }
-    return last;
-  };
-
-  deliver().then(result => {
-    if (result.skipped) {
-      console.log('Заявка с сайта (Telegram не настроен):\n' + text);
-      return;
-    }
-    if (result.status === 200) return;
-
-    // Не полагаемся только на Telegram: каждая неотправленная заявка
-    // дописывается в файл, чтобы её можно было поднять вручную.
-    const stamp = new Date().toISOString();
-    try {
-      const fs = require('fs');
-      const dir = process.env.LEAD_LOG_DIR || '/var/lib/ztlab';
-      fs.appendFileSync(`${dir}/leads.log`,
-        `\n===== ${stamp} · не доставлено в Telegram (${result.error || result.status}) =====\n${text}\n`);
-    } catch (e) {
-      console.error('Не удалось записать заявку в leads.log:', e.message);
-    }
-    console.error('Заявка не доставлена в Telegram:', JSON.stringify(result));
-  });
-
-  res.status(200).send(
-    'Заявка принята. Мы свяжемся с вами в рабочее время. ' +
-    'Если не дождётесь звонка — напишите нам в Telegram или WhatsApp.'
-  );
-});
+// ------ Живость и заявка с лендинга ------
+app.use(createHealthRoutes({ db }));
+app.use(createLeadRoutes());
 
 // ------ Проверка сессии и роли ------
 // Описаны в src/middleware/auth.js: там же счётчики попыток входа,
@@ -355,271 +269,18 @@ app.get('/admin', requireAdmin, (req, res) => {
 // развёртывание и вторую поверхность атаки ради правки текста.
 app.use('/admin/content', require('./src/routes/content-admin'));
 
-// ------ Маршруты ------
-
-// Восстановление пароля и вход по одноразовой ссылке. Маршруты
-// публичные, но бесполезны без ссылки из письма: её хранит только
-// хэш, поэтому по содержимому базы войти нельзя.
+// ------ Вход, регистрация и пробный период ------
+// Маршруты вынесены в src/routes: страницы входа и экраны триала
+// занимали подряд почти 270 строк. Роутеры подключаются без
+// префикса, поэтому пути не изменились. Регистрация лаборатории
+// (/register-lab) осталась в модуле триала: в исходном порядке она
+// шла сразу после экрана /trial и относится к тому же сценарию.
 app.use(createPasswordRoutes({ db, hashPassword }));
+app.use(createAuthPageRoutes({
+  db, query, mailer, verifyPassword, registerAttempt, clearAttempts,
+}));
+app.use(createTrialRoutes({ db, query, hashPassword }));
 
-// Страница входа
-app.get('/login', async (req, res) => {
-  // Адрес лаборатории можно указать один раз и потом просто входить по паролю.
-  // Ссылка вида /login?lab=ivanova приходит из письма или закладки.
-  const preslug = String(req.query.lab || '').trim();
-  const error = String(req.query.error || '');
-  res.render('login', { error: error || null, preslug });
-});
-
-// Страница регистрации лаборатории
-app.get('/register', async (req, res) => {
-  res.render('register', { error: null });
-});
-
-// Вход по имени и паролю. Раньше пароля не было: на странице входа был
-// выбор имени из списка, что неприемлемо, когда в системе чужие лаборатории.
-app.post('/set-user', async (req, res) => {
-  const username = (req.body.username || '').trim();
-  const password = req.body.password || '';
-  const slug = (req.body.lab_slug || '').trim().toLowerCase();
-  const ip = req.ip || 'unknown';
-  // Счётчик ведём по паре «адрес + сотрудник», а не только по адресу:
-  // за одним роутером сидит вся лаборатория, и общий счётчик на адрес
-  // блокировал бы вход сразу всем после пары чужих ошибок.
-  if (registerAttempt(ip, slug, username)) {
-    return res.status(429).render('login', { error: 'Слишком много попыток. Подождите 15 минут.', preslug: slug });
-  }
-
-  const fail = (msg, status) => res.status(status).render('login', { error: msg, preslug: slug });
-
-  try {
-    // Лабораторию нужно знать заранее: одно и то же имя может быть
-    // у сотрудника любой лаборатории, искать по всем сразу нельзя —
-    // иначе можно войти в чужую лабораторию, назвав чужое имя.
-    if (!slug) {
-      return fail('Укажите адрес лаборатории', 400);
-    }
-    const lab = query('SELECT id, slug FROM labs WHERE slug = ?', [slug]);
-    if (lab.rows.length === 0) {
-      // Не сообщаем, существует ли адрес, чтобы не перебирать лаборатории.
-      return fail('Неверное имя, пароль или адрес лаборатории', 401);
-    }
-    const labId = lab.rows[0].id;
-
-    const result = query(
-      'SELECT * FROM users WHERE name = ? AND lab_id = ?',
-      [username, labId]
-    );
-    if (result.rows.length === 0) {
-      return fail('Неверное имя, пароль или адрес лаборатории', 401);
-    }
-
-    const user = result.rows[0];
-    if (!user.active) {
-      return fail('Учётная запись отключена', 403);
-    }
-    if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
-      return fail('Неверное имя, пароль или адрес лаборатории', 401);
-    }
-
-clearAttempts(ip, slug, username);
-    req.session.user = username;
-      req.session.userId = user.id;
-      req.session.labId = labId;
-    req.session.role = user.role;
-    req.session.labSlug = slug;
-    // После входа открываем список заказ-нарядов, а не обмен файлами:
-    // заказ-наряд — то, ради чего обращаются в лабораторию, и раньше
-    // приходилось начинать с файлообменника, где нужного раздела не видно.
-    res.redirect('/orders');
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Ошибка сервера');
-  }
-});
-
-app.get('/logout', (req, res) => {
-  // Адрес лаборатории запоминаем, чтобы на форме входа он уже был заполнен.
-  const slug = req.session.labSlug || '';
-  req.session.destroy(() => {
-    res.redirect(slug ? `/login?lab=${encodeURIComponent(slug)}` : '/login');
-  });
-});
-
-// ---- Пробный период: закончился ----
-//
-// Экран показывает, что произошло, и куда писать. Функционал при этом
-// закрыт целиком, но данные на месте: после оплаты человек возвращается
-// к своим нарядам, а не начинает заново.
-app.get('/trial', (req, res) => {
-  const lab = req.session.labId
-    ? db.prepare('SELECT name, trial_until, trial_email, trial_phone FROM labs WHERE id = ?')
-      .get(req.session.labId)
-    : null;
-  res.render('trial-expired', {
-    lab,
-    loggedIn: !!req.session.user,
-    error: req.query.error ? String(req.query.error) : null,
-    sent: req.query.sent === '1',
-  });
-});
-
-// Продление. Оплаты онлайн ещё нет, поэтому действие одно: доступ снимает
-// менеджер после оплаты. Заявка уходит тем же путём, что и с лендинга, —
-// в Telegram, а если он не настроен, в leads.log. Писать в базу некуда:
-// таблицы заявок нет, а заводить её ради одной формы избыточно.
-app.post('/trial/renew', (req, res) => {
-  const check = TRIAL.validateContact(req.body.email, req.body.phone);
-  if (!check.ok) {
-    return res.redirect('/trial?error=' + encodeURIComponent(check.error));
-  }
-  const lab = req.session.labId
-    ? db.prepare('SELECT name, trial_until, trial_email FROM labs WHERE id = ?').get(req.session.labId)
-    : null;
-  const text = [
-    'ЗАЯВКА НА ПРОДЛЕНИЕ',
-    `Лаборатория: ${lab ? lab.name : 'не указана'}`,
-    `E-mail: ${check.email}${check.phone ? `, тел.: ${check.phone}` : ''}`,
-    `Пробный период истёк: ${lab && lab.trial_until ? lab.trial_until : '—'}`,
-    `Контакт при регистрации: ${lab && lab.trial_email ? lab.trial_email : '—'}`,
-    `Комментарий: ${String(req.body.message || '').trim().slice(0, 1000) || '—'}`,
-  ].join('\n');
-
-  const { send, configured } = require('./src/services/telegram');
-  const deliver = async () => {
-    if (!configured) return { skipped: true };
-    let last = {};
-    // Одна повторная попытка: как и на лендинге, маршрут до Telegram
-    // местами подвисает, и человек ушёл бы, решив, что заявка пропала.
-    for (let attempt = 0; attempt < 2; attempt++) {
-      last = await send(text, { timeoutMs: 10000 });
-      if (last.status === 200) return last;
-      await new Promise(r => setTimeout(r, 1200));
-    }
-    return last;
-  };
-
-  deliver().then(result => {
-    if (result.skipped) {
-      console.log('Заявка на продление (Telegram не настроен):\n' + text);
-      return;
-    }
-    if (result.status === 200) return;
-    // Как и на лендинге: неотправленное не теряем, а дописываем в файл.
-    try {
-      const fs = require('fs');
-      const dir = process.env.LEAD_LOG_DIR || '/var/lib/ztlab';
-      fs.appendFileSync(`${dir}/leads.log`,
-        `\n===== ${new Date().toISOString()} · продление не доставлено =====\n${text}\n`);
-    } catch (e) {
-      console.error('Не удалось записать заявку в leads.log:', e.message);
-    }
-  });
-
-  res.redirect('/trial?sent=1');
-});
-
-// Регистрация новой лаборатории. Создаёт лабораторию и первого
-// администратора за один шаг, чтобы не пришлось настраивать вручную.
-  app.post('/register-lab', async (req, res) => {
-    const labName = (req.body.lab_name || '').trim();
-    const userName = (req.body.username || '').trim();
-    const password = req.body.password || '';
-
-    // Ошибку показываем на самой форме, а не голым текстом: раньше
-    // res.send() отдавал пустую страницу, и человек терял всё, что уже
-    // набрал, и не понимал, к какому полю претензия.
-    const fail = (message, status = 400) => res.status(status).render('register', {
-      error: message,
-      form: {
-        lab_name: req.body.lab_name || '',
-        slug: req.body.slug || '',
-        username: req.body.username || '',
-        email: req.body.email || '',
-        phone: req.body.phone || '',
-      },
-    });
-
-    if (!labName) return fail('Укажите название лаборатории');
-    if (!userName) return fail('Укажите имя пользователя');
-    if (password.length < 6) return fail('Пароль короче 6 символов');
-
-    // Обязателен только e-mail: без него пробный период нечем продлить,
-    // а человек после недели не понимает, куда писать. Телефон необязателен
-    // и ошибку его разбора регистрации не роняет. Это персональные данные,
-    // поэтому форма регистрации ссылается на политику.
-    const contact = TRIAL.validateContact(req.body.email, req.body.phone);
-    if (!contact.ok) return fail(contact.error);
-  
-    try {
-    let slug = (req.body.slug || '').trim().toLowerCase()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/^-+|-+$/g, '');
-    if (!slug) slug = 'lab-' + Date.now().toString(36);
-
-    const exists = query('SELECT id FROM labs WHERE slug = ?', [slug]).rows;
-    if (exists.length > 0) {
-      return fail('Такая лаборатория уже зарегистрирована', 409);
-    }
-
-      // Пробный период начинается сразу: неделя отсчитывается от даты
-      // регистрации, а не от первого входа. Иначе «пробный» человек,
-      // зарегистрировавшийся и ушедший на месяц, обнаружил бы истёкший
-      // срок при первом же открытии.
-      query(
-        'INSERT INTO labs (slug, name, trial_until, trial_email, trial_phone) VALUES (?, ?, ?, ?, ?)',
-        [slug, labName, TRIAL.trialUntil(), contact.email, contact.phone]
-      );
-      const labId = db.prepare('SELECT id FROM labs WHERE slug = ?').get(slug).id;
-
-    query(
-      'INSERT INTO users (name, password_hash, role, active, lab_id) VALUES (?, ?, ?, 1, ?)',
-      [userName, hashPassword(password), 'admin', labId]
-    );
-
-    // Свой прайс заводим сразу при регистрации, а не при первом
-    // открытии наряда: лаборатория должна начать работать без
-    // предварительного захода на пустую страницу — иначе первый наряд
-    // создавался бы в окружении с пустым справочником.
-    constructions.seed(db, labId);
-
-  req.session.user = userName;
-      req.session.userId = query(
-        'SELECT id FROM users WHERE name = ? AND lab_id = ?', [userName, labId]
-      ).rows[0].id;
-      req.session.labId = labId;
-      req.session.role = 'admin';
-    req.session.labSlug = slug;
-    // Телефон мог не распознаться. На следующей странице один раз
-    // покажем это и снимем, иначе сообщение так и не появится.
-    if (contact.warning) req.session.notice = contact.warning;
-
-    // Данные для входа уходят на указанную при регистрации почту.
-    // Пароль в письме не пересылаем: вместо него — одноразовая
-    // ссылка, по которой человек задаст пароль заново, если
-    // потеряет свой. Лаборатория и сотрудник к этому моменту уже
-    // созданы, поэтому письмо — только подсказка, и его ошибка не
-    // должна превращать успешную регистрацию в 500.
-    const { token: welcomeToken } = RESET.createReset(db, req.session.userId);
-    await mailer.send(mailer.welcomeMail({
-      to: contact.email,
-      labSlug: slug,
-      username: userName,
-      link: `${mailer.originFor(req)}/password/set?token=${encodeURIComponent(welcomeToken)}`,
-    }));
-
-    res.redirect('/');
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Ошибка при регистрации');
-  }
-});
-
-
-// Главная страница (с перенаправлением для Елены и динамическим поиском)
-// Хаб приложения: точка входа после входа. Раньше на '/' стоял обмен
-// файлами, и человек, открывая программу, попадал в случайный раздел.
-// Теперь '/' — меню разделов, а обмен файлами живёт на '/files'.
 // ------ Хаб, обмен файлами и сотрудники ------
 // Маршруты вынесены в src/routes: хаб, обмен 3D-файлами и список
 // сотрудников занимали подряд почти полтысячи строк. Роутеры
