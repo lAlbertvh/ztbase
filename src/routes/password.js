@@ -11,6 +11,7 @@
 const express = require('express');
 const RESET = require('../services/password-reset');
 const mailer = require('../services/mailer');
+const { createLimiter } = require('../services/rate-limit');
 
 // Письмо на запрос ссылки. Столько же, сколько входных попыток на
 // пару «адрес + сотрудник»: иначе форма рассылала бы письма без
@@ -19,9 +20,17 @@ const MAX_RESET_ATTEMPTS = 5;
 // Отдельно считаем по лаборатории: имя сотрудника в запросе можно
 // менять, а письмо всё равно уходит на одну почту лаборатории.
 const MAX_RESET_PER_LAB = 10;
+const RESET_WINDOW_MS = 15 * 60 * 1000;
 
-module.exports = function createPasswordRoutes({ db, hashPassword, attemptsFor }) {
+module.exports = function createPasswordRoutes({ db, hashPassword }) {
   const router = express.Router();
+
+  // Счётчики живут в памяти процесса и обнуляются при перезапуске.
+  // Для ограничения рассылки этого достаточно: перезапуск сервера
+  // не должен открывать новую возможность слать письма, но и не
+  // обязан переживать перезапуск.
+  const resetByUser = createLimiter({ limit: MAX_RESET_ATTEMPTS, windowMs: RESET_WINDOW_MS });
+  const resetByLab = createLimiter({ limit: MAX_RESET_PER_LAB, windowMs: RESET_WINDOW_MS });
 
   const labMail = lab => (lab.trial_email || lab.contact || '').trim();
 
@@ -52,7 +61,8 @@ module.exports = function createPasswordRoutes({ db, hashPassword, attemptsFor }
     // жить он должен всё окно.
     const userKey = `reset:${req.ip}:${labSlug}:${username}`;
     const labKey = `reset:${req.ip}:${labSlug}`;
-    if (attemptsFor(userKey) > MAX_RESET_ATTEMPTS || attemptsFor(labKey) > MAX_RESET_PER_LAB) {
+    if (resetByUser.count(userKey) > MAX_RESET_ATTEMPTS
+        || resetByLab.count(labKey) > MAX_RESET_PER_LAB) {
       return res.status(429).render('password-reset', {
         error: 'Слишком много попыток. Подождите 15 минут.', sent: false, lab: labSlug, username,
       });

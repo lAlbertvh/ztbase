@@ -183,43 +183,6 @@ const upload = multer({
   },
 });
 
-// Защита от подбора пароля.
-//
-// Счётчика два, потому что лаборатория обычно сидит за одним роутером,
-// и один счётчик на весь адрес блокировал бы вход сразу всем сотрудникам.
-//
-//  1) на пару «адрес + сотрудник» — 10 попыток. Защищает конкретную учётку.
-//  2) на адрес — 100 попыток. Ловит перебор с перебором имён подряд,
-//     но обычных сотрудников не задевает.
-const loginAttempts = new Map();
-const MAX_ATTEMPTS = 10;
-const MAX_ATTEMPTS_PER_IP = 100;
-const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
-
-function attemptsFor(key) {
-  const now = Date.now();
-  const rec = loginAttempts.get(key);
-  if (!rec || now - rec.first > ATTEMPT_WINDOW_MS) {
-    loginAttempts.set(key, { count: 1, first: now });
-    return 1;
-  }
-  rec.count += 1;
-  return rec.count;
-}
-
-function clearAttempts(keys) {
-  for (const k of [].concat(keys)) loginAttempts.delete(k);
-}
-
-// Периодически убираем протухшие записи, иначе память растёт бесконечно.
-const attemptsSweep = setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of loginAttempts) {
-    if (now - v.first > ATTEMPT_WINDOW_MS) loginAttempts.delete(k);
-  }
-}, ATTEMPT_WINDOW_MS);
-if (attemptsSweep.unref) attemptsSweep.unref();
-
 // Проверка живости. Не требует входа и не отдаёт никаких данных.
 // nginx и systemd используют её, чтобы понять, поднялся ли процесс.
 app.get('/health', (req, res) => {
@@ -316,83 +279,15 @@ app.post('/lead', (req, res) => {
   );
 });
 
-// ------ Middleware авторизации ------
-  // /join — вход нового сотрудника по одноразовому коду. Публичный
-  // по существу: человек приходит по ссылке из мессенджера ещё без
-  // сессии. Свою проверку кода делает маршрут, а лабораторию код
-  // определяет сам — в форме её выбрать нельзя.
-  const PUBLIC_PATHS = new Set([
-    '/login', '/set-user', '/register', '/register-lab', '/health', '/lead', '/logout',
-    '/join', '/legal/privacy', '/legal/offer',
-    // Восстановление пароля приходит по ссылке из письма, то есть
-    // до всякой сессии. Саму ссылку проверяет маршрут, а форма запроса
-    // открыта всем: иначе забытый пароль нельзя было бы восстановить.
-    '/password/reset', '/password/set',
-  ]);
+// ------ Проверка сессии и роли ------
+// Описаны в src/middleware/auth.js: там же счётчики попыток входа,
+// которые нужны маршруту /set-user. Подключается как middleware, чтобы
+// порядок проверок не изменился.
+const createAuth = require('./src/middleware/auth');
+const auth = createAuth(db);
+const { requireAdmin, registerAttempt, clearAttempts } = auth;
 
-  // Экран продления и его форма должны работать без действующей подписки.
-  // Это не ослабление проверки: внутри /trial нет ни одного рабочего
-  // раздела, там только текст и заявка на продление. Держать их в общем
-  // списке необязательно — проверка пробного периода ниже специально
-  // пропускает этот префикс.
-  const TRIAL_PATHS = ['/trial'];
-
-// Редактор содержимого пропускается мимо общей проверки, иначе запрос
-// без сессии ушёл бы на /login и до маршрута не дошёл. Свою проверку
-// раздел всё равно делает: пароль, если он задан, и роль администратора.
-// /public и обе админки должны доходить до своих обработчиков без
-// сессии: там своя проверка — пароль администратора. Иначе глобальный
-// редирект на /login перехватывал бы запрос раньше Basic-аутентификации,
-// и вместо ответа 401 клиент получал бы 302 и не понимал, что нужен пароль.
-const PUBLIC_PREFIXES = ['/public', '/admin/content'];
-
-app.use((req, res, next) => {
-  if (PUBLIC_PATHS.has(req.path) ||
-      PUBLIC_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
-    return next();
-  }
-  if (!req.session.user) {
-    return res.redirect('/login');
-  }
-  // Роль и пользователь нужны каждому экрану, а не только главному:
-  // навигация решает по роли, какие плитки вообще показывать.
-  // Явные параметры res.render по-прежнему имеют приоритет.
-res.locals.currentUser = req.session.user;
-    res.locals.isAdmin = req.session.role === 'admin';
-    res.locals.isDentist = req.session.role === 'dentist';
-
-        // Пробный период закончился: весь функционал закрыт, лаборатория
-        // видит экран продления. Данные не удаляются — после оплаты всё
-        // вернётся как было.
-        //
-        // Проверка после проверки сессии: неавторизованный посетитель должен
-        // получить /login, а не экран оплаты чужой лаборатории.
-        if (!TRIAL_PATHS.some((prefix) => req.path.startsWith(prefix)) &&
-            TRIAL.trialExpired(db, req.session.labId)) {
-          return res.redirect('/trial');
-        }
-
-        // Незавершённая настройка: показываем мастер вместо рабочих
-        // экранов. Это только первый запуск лаборатории — после «пропустить»
-        // флаг снимается и мастер больше не появляется сам. Проверяем
-        // администратора, а не любого вошедшего: врачу мастер не нужен, и
-        // его не должно уводить с чужой настройки.
-      if (req.session.role === 'admin' &&
-        !req.path.startsWith('/setup') &&
-        req.path !== '/logout' &&
-        setupPending(db, req.session.labId)) {
-      return res.redirect('/setup');
-    }
-    next();
-  });
-
-// Только администратор лаборатории (удаление файлов, пользователи).
-function requireAdmin(req, res, next) {
-  if (!req.session.user || req.session.role !== 'admin') {
-    return res.status(403).send('Недостаточно прав');
-  }
-  next();
-}
+app.use(auth.router);
 
 // ------ Заказ-наряды ------
 // Маршруты подключаются здесь, после requireAdmin: наряды нуждаются
@@ -461,7 +356,7 @@ app.use('/admin/content', require('./src/routes/content-admin'));
 // Восстановление пароля и вход по одноразовой ссылке. Маршруты
 // публичные, но бесполезны без ссылки из письма: её хранит только
 // хэш, поэтому по содержимому базы войти нельзя.
-app.use(createPasswordRoutes({ db, hashPassword, attemptsFor }));
+app.use(createPasswordRoutes({ db, hashPassword }));
 
 // Страница входа
 app.get('/login', async (req, res) => {
@@ -487,10 +382,7 @@ app.post('/set-user', async (req, res) => {
   // Счётчик ведём по паре «адрес + сотрудник», а не только по адресу:
   // за одним роутером сидит вся лаборатория, и общий счётчик на адрес
   // блокировал бы вход сразу всем после пары чужих ошибок.
-  const ipKey = `ip:${ip}`;
-  const userKey = `user:${ip}:${slug}:${username}`;
-
-  if (attemptsFor(ipKey) > MAX_ATTEMPTS_PER_IP || attemptsFor(userKey) > MAX_ATTEMPTS) {
+  if (registerAttempt(ip, slug, username)) {
     return res.status(429).render('login', { error: 'Слишком много попыток. Подождите 15 минут.', preslug: slug });
   }
 
@@ -526,8 +418,8 @@ app.post('/set-user', async (req, res) => {
       return fail('Неверное имя, пароль или адрес лаборатории', 401);
     }
 
-clearAttempts([ipKey, userKey]);
-      req.session.user = username;
+clearAttempts(ip, slug, username);
+    req.session.user = username;
       req.session.userId = user.id;
       req.session.labId = labId;
     req.session.role = user.role;
