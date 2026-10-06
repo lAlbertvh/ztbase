@@ -118,6 +118,46 @@ function contactsOf(overrides = {}) {
     check(`в ${file} телефон подставлен`, rendered.includes('+7 923 483-65-94'));
   }
 
+  // Ссылки внутри документов. Проверка важна по конкретной причине:
+  // оферта отдаётся и приложением (/legal/offer), и лендингом
+  // (/offer.html), поэтому ссылка должна быть абсолютной — и адрес
+  // должен открываться в обоих контекстах. Ссылка текстом без href
+  // тоже ломает смысл: документ отсылает к другому, а перейти нельзя.
+  const offerPath = path.join(ROOT, 'deploy', 'landing', 'legal', 'offer.html');
+  if (fs.existsSync(offerPath)) {
+    const offer = landing.renderFile(offerPath, contactsOf());
+    const refs = [...offer.matchAll(/(политик[а-я]*\s+конфиденциальности)/gi)]
+      .map(m => m[0]);
+    const links = [...offer.matchAll(/<a href="([^"]+)"[^>]*>([^<]*)<\/a>/g)]
+      .map(m => ({ href: m[1], text: m[2] }));
+
+    check('политика упомянута в оферте', refs.length > 0, `упоминаний: ${refs.length}`);
+    const refLinked = links.filter(l => /конфиденциальност/i.test(l.text));
+    check('каждое упоминание политики — ссылка',
+      refs.length > 0 && refLinked.length === refs.length,
+      `упоминаний ${refs.length}, ссылок ${refLinked.length}`);
+    check('ссылка на политику абсолютная',
+      refLinked.every(l => l.href.startsWith('/')),
+      refLinked.map(l => l.href).join(', '));
+    check('ссылка ведёт на существующий документ',
+      refLinked.every(l => /^\/(legal\/)?privacy\.html$/.test(l.href)),
+      refLinked.map(l => l.href).join(', '));
+
+    // Относительная ссылка не выжила бы в приложении: на /legal/offer
+    // она превратилась бы в /legal/privacy.html, которого нет.
+    check('нет относительных ссылок на документы',
+      !links.some(l => /^(privacy|offer)\.html$/.test(l.href)));
+  }
+
+  // Алиасы в приложении обязаны совпадать с адресами лендинга, иначе
+  // ссылка из документа уведёт на 404 или на /login.
+  const authSrc = fs.readFileSync(path.join(ROOT, 'src', 'middleware', 'auth.js'), 'utf8');
+  const legalSrc = fs.readFileSync(path.join(ROOT, 'src', 'routes', 'legal.js'), 'utf8');
+  for (const doc of ['privacy.html', 'offer.html']) {
+    check(`${doc} публичен без сессии`, authSrc.includes(`'/${doc}'`));
+    check(`${doc} отдаётся приложением`, legalSrc.includes(`'/${doc}'`));
+  }
+
   // --- Настоящий site.json проекта ---
   const sitePath = path.join(ROOT, 'content', 'site.json');
   if (fs.existsSync(sitePath)) {

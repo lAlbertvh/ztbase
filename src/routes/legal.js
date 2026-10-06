@@ -82,5 +82,17 @@ module.exports = function createLegalRoutes() {
   router.get('/legal/privacy', page('privacy.html', 'Политика конфиденциальности'));
   router.get('/legal/offer', page('offer.html', 'Договор оферты'));
 
+  // Те же документы под адресами лендинга. Нужны потому, что файлы
+  // общие: один и тот же offer.html отдаётся и приложением
+  // (/legal/offer), и лендингом (/offer.html, скрипт раскладки
+  // расплющивает папку legal/). Ссылка внутри документа должна
+  // работать в обоих случаях, а относительная не работает: на
+  // /legal/offer она превратилась бы в /legal/privacy.html.
+  //
+  // Поэтому в разметке стоит абсолютный /privacy.html, а эти два
+  // маршрута делают его верным и в приложении.
+  router.get('/privacy.html', page('privacy.html', 'Политика конфиденциальности'));
+  router.get('/offer.html', page('offer.html', 'Договор оферты'));
+
   return router;
 };
