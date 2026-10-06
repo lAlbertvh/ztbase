@@ -105,13 +105,17 @@ sudo deploy/check.sh ztbase.ru      # полная проверка: серви�
 ## Тесты
 
 ```bash
-npm test          # 473 проверки, девять наборов
+npm test          # 497 проверок, десять наборов
 npm run test:unit # только быстрые юнит-тесты
 ```
 
-Наборы: `manipulations`, `inbox`, `quota` — юнит; `orders`, `storage`,
-`setup`, `chat`, `clinics`, `password` — живые, поднимают приложение.
-Тесты гоняются в CI при каждом пуше.
+Наборы: `manipulations`, `inbox`, `quota`, `landing` — юнит; `orders`,
+`storage`, `setup`, `chat`, `clinics`, `password` — живые, поднимают
+приложение. Тесты гоняются в CI при каждом пуше.
+
+Контакты для сайта и приложения берутся из одного `content/site.json`:
+в разметке лендинга и правовых документов стоят метки `{{phone}}`,
+`{{email}}`, которые подставляет `src/services/landing-render.js`.
 
 ## Обновление и откат
 

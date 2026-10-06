@@ -5,8 +5,8 @@
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
-    "test": "node test/manipulations-unit.js && node test/inbox-unit.js && node test/quota-unit.js && node test/orders-live.js && node test/storage-live.js && node test/setup-live.js && node test/chat-live.js && node test/clinics-live.js && node test/password-live.js",
-    "test:unit": "node test/manipulations-unit.js && node test/inbox-unit.js && node test/quota-unit.js",
+    "test": "node test/manipulations-unit.js && node test/inbox-unit.js && node test/quota-unit.js && node test/landing-unit.js && node test/orders-live.js && node test/storage-live.js && node test/setup-live.js && node test/chat-live.js && node test/clinics-live.js && node test/password-live.js",
+    "test:unit": "node test/manipulations-unit.js && node test/inbox-unit.js && node test/quota-unit.js && node test/landing-unit.js",
     "test:inbox": "node test/inbox-unit.js",
     "test:quota": "node test/quota-unit.js",
     "test:storage": "node test/storage-live.js",
@@ -19,7 +19,8 @@
     "build:win": "pkg server.js --targets node22-win-x64 --output dist/exo-win.exe",
     "build:mac": "pkg server.js --targets node22-macos-x64 --output dist/exo-macos",
     "build": "npm run build:linux && npm run build:win && npm run build:mac",
-    "pkg": "pkg server.js"
+    "pkg": "pkg server.js",
+    "test:landing": "node test/landing-unit.js"
   },
   "pkg": {
     "assets": [
@@ -68,5 +69,8 @@
   },
   "engines": {
     "node": "22.x"
+  },
+  "overrides": {
+    "proxy-addr": "2.0.8"
   }
 }

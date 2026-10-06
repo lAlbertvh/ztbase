@@ -8,10 +8,16 @@
 // Документы лежат в deploy/landing/legal — там же их публикует лендинг.
 // Приложение читает файлы оттуда, чтобы текст не расходился между
 // сайтом и программой: править придётся в одном месте.
+//
+// В файлах контакты записаны метками {{phone}} и {{email}}: те же
+// шаблоны использует лендинг. Подстановка обязательна, иначе человек
+// прочитал бы в оферте «Связь: {{email}}» вместо адреса.
 
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const cfg = require('../config');
+const landing = require('../services/landing-render');
 
 // Куда смотреть за документами. В разработке это deploy/landing/legal
 // рядом с server.js, при установке в /opt/ztlab — тот же путь внутри
@@ -19,14 +25,36 @@ const path = require('path');
 // отсутствие документа о правах выглядит как отказ их показывать.
 const LEGAL_DIR = path.join(__dirname, '..', '..', 'deploy', 'landing', 'legal');
 
+// Контакты для подстановки. Читаются из того же site.json, который
+// правится через /admin/content, и кэшируются на минуту: документ
+// открывают редко, а файл на каждый запрос читать незачем.
+let contactsCache = null;
+let contactsAt = 0;
+const CONTACTS_TTL_MS = 60 * 1000;
+
+function readContacts() {
+  const now = Date.now();
+  if (contactsCache && now - contactsAt < CONTACTS_TTL_MS) return contactsCache;
+  const file = path.join(cfg.contentDir, 'site.json');
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  contactsCache = landing.readContacts(JSON.stringify(raw)).contacts;
+  contactsAt = now;
+  return contactsCache;
+}
+
 module.exports = function createLegalRoutes() {
   const router = express.Router();
 
   const page = (file, title) => (req, res) => {
     let html = '';
     try {
-      html = fs.readFileSync(path.join(LEGAL_DIR, file), 'utf8');
+      const contacts = readContacts();
+      html = landing.render(fs.readFileSync(path.join(LEGAL_DIR, file), 'utf8'), contacts);
     } catch (err) {
+      console.error('Правовой документ не прочитан:', err.message);
+      // Документ о правах должен открываться всегда: отсутствие текста
+      // выглядит как отказ их показывать, а человек соглашался на
+      // обработку данных именно под этим текстом.
       html = `<p>Документ временно недоступен. Свяжитесь с нами: Telegram, WhatsApp или почта на сайте.</p>`;
     }
     // Обёртка нужна, потому что документы самостоятельные HTML-страницы
